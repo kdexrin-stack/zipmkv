@@ -1,0 +1,57 @@
+# Python build/runtime
+.build_venv/
+.cache/
+__pycache__/
+*.py[cod]
+build/
+dist/
+runtime/
+logs/
+output/
+temp/
+config/
+/tools/
+*.spec
+
+# Re-created automatically by build_exe.py
+vendor/tools/ffmpeg/ffmpeg.exe
+
+# Flutter/Dart generated files and project-local toolchain
+mobileapp/toolchain/
+mobileapp/.dart_tool/
+mobileapp/.flutter-plugins*
+mobileapp/.packages
+mobileapp/build/
+mobileapp/android/.gradle/
+mobileapp/android/local.properties
+mobileapp/android/key.properties
+mobileapp/signing/
+mobileapp/ios/Pods/
+mobileapp/ios/.symlinks/
+mobileapp/ios/Flutter/ephemeral/
+mobileapp/ios/Flutter/Generated.xcconfig
+mobileapp/ios/Flutter/flutter_export_environment.sh
+
+# HarmonyOS generated output, SDK/toolchain and private signing identity
+mobileapp/harmony/.hvigor/
+mobileapp/harmony/oh_modules/
+mobileapp/harmony/**/oh_modules/
+mobileapp/harmony/**/build/
+mobileapp/harmony/local.properties
+mobileapp/harmony/toolchain/
+mobileapp/harmony/signing/*
+!mobileapp/harmony/signing/README.md
+*.p12
+*.pfx
+*.pem
+*.key
+*.cer
+*.p7b
+*.profile
+
+# Editors and operating systems
+.idea/
+.vscode/
+*.iml
+.DS_Store
+Thumbs.db
