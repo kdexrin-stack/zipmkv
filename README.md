@@ -42,7 +42,7 @@ temp/
 项目已内置：
 
 - 7-Zip 命令行工具：用于 `.zip`、`.rar`、`.7z`、`.cbz`、`.cbr`、`.cb7`、`.epub`、`.tar`、`.gz` 等格式。
-- FFmpeg：构建时通过 `imageio-ffmpeg` 准备，并以单份内置工具打进 EXE，用于读取、修改和封装视频内字幕。
+- FFmpeg：构建时通过 `imageio-ffmpeg` 准备，以 LZMA2/BCJ2 压缩包内置于 EXE；首次处理视频时自动释放到 `tools/ffmpeg`，不联网下载。
 
 程序只使用项目/EXE 内置的 7-Zip，不再查找电脑上安装的 7-Zip、WinRAR 或 tar。
 
@@ -93,9 +93,10 @@ python .\build_exe.py
 - 创建或复用项目内 `.build_venv`
 - 安装/更新 PyInstaller、Pillow、ReportLab、img2pdf、natsort、imageio-ffmpeg
 - 检查并准备项目内置 7-Zip
+- 使用内置 7-Zip 高压缩 FFmpeg，并排除未使用的 AVIF 插件
 - 运行烟测
 - 生成单文件 `dist/zipmkv.exe`
-- 启动生成的 EXE 并验证首屏事件循环能够正常完成
+- 在全新空目录启动生成的 EXE，逐页加载界面并验证内置 7-Zip、FFmpeg 能够执行
 
 不需要手动激活 venv。
 

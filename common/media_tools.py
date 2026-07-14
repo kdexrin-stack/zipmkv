@@ -7,7 +7,7 @@ import shutil
 import subprocess
 from pathlib import Path
 
-from .paths import app_root, materialize_tool_dir, resource_path
+from .paths import app_root, materialize_tool_dir, resource_path, runtime_tool_dir
 
 
 def _program_file_dirs(app_dir_name: str) -> list[Path]:
@@ -85,7 +85,16 @@ def find_ffprobe() -> Path | None:
 
 
 def describe_ffmpeg(path: str | Path | None = None) -> str:
-    ffmpeg = Path(path) if path else find_ffmpeg()
+    if path is None:
+        materialized = runtime_tool_dir("ffmpeg") / "ffmpeg.exe"
+        if materialized.exists():
+            ffmpeg = materialized
+        elif (resource_path("vendor", "tools", "ffmpeg", "ffmpeg.7z")).exists():
+            return "内置 FFmpeg：首次处理视频时自动准备"
+        else:
+            ffmpeg = find_ffmpeg()
+    else:
+        ffmpeg = Path(path)
     if not ffmpeg:
         return "未检测到 FFmpeg"
     try:

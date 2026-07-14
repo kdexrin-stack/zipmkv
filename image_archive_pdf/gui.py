@@ -34,7 +34,6 @@ class FeatureFrame(ToolFrame):
         self._build()
 
     def _build(self) -> None:
-        ttk.Label(self, text=self.description).pack(anchor=tk.W)
         ttk.Label(
             self,
             text="不改源文件；默认把所选内容合并成一个大文件。PDF 输入合并为 PDF 时保留原页面；PDF 输出 EPUB 时会提取可复制文本。",

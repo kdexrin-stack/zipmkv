@@ -1,8 +1,10 @@
 from __future__ import annotations
 
 import os
+import shutil
 import subprocess
 import sys
+import tempfile
 from pathlib import Path
 
 
@@ -10,6 +12,7 @@ ROOT = Path(__file__).resolve().parent
 BUILD_ENV = ROOT / ".build_venv"
 VENDOR_7ZIP = ROOT / "vendor" / "tools" / "7zip"
 VENDOR_FFMPEG = ROOT / "vendor" / "tools" / "ffmpeg"
+VENDOR_FFMPEG_ARCHIVE = VENDOR_FFMPEG / "ffmpeg.7z"
 DIST_EXE = ROOT / "dist" / "zipmkv.exe"
 REQUIREMENTS_FILE = ROOT / "requirements.txt"
 
@@ -88,10 +91,37 @@ def ensure_vendor_ffmpeg() -> None:
         raise SystemExit(f"FFmpeg executable was reported but not found: {source}")
 
     VENDOR_FFMPEG.mkdir(parents=True, exist_ok=True)
-    import shutil
-
     shutil.copy2(source, target)
     print(f"Vendored FFmpeg from: {source}")
+
+
+def ensure_vendor_ffmpeg_archive() -> None:
+    source = VENDOR_FFMPEG / "ffmpeg.exe"
+    seven_zip = VENDOR_7ZIP / "7z.exe"
+    if not source.exists():
+        raise SystemExit("Bundled FFmpeg source is missing before archive creation.")
+    if VENDOR_FFMPEG_ARCHIVE.exists() and VENDOR_FFMPEG_ARCHIVE.stat().st_mtime >= source.stat().st_mtime:
+        return
+
+    VENDOR_FFMPEG_ARCHIVE.unlink(missing_ok=True)
+    run(
+        [
+            str(seven_zip),
+            "a",
+            "-t7z",
+            "-mx=9",
+            "-m0=lzma2",
+            "-md=256m",
+            "-mfb=273",
+            "-mmt=on",
+            str(VENDOR_FFMPEG_ARCHIVE),
+            str(source),
+        ],
+        timeout=600,
+    )
+    if not VENDOR_FFMPEG_ARCHIVE.exists():
+        raise SystemExit("7-Zip finished without creating the bundled FFmpeg archive.")
+    print(f"Compressed bundled FFmpeg: {VENDOR_FFMPEG_ARCHIVE}")
 
 
 def rerun_inside_venv() -> None:
@@ -147,8 +177,14 @@ def build_exe() -> Path:
         # prevents PyInstaller from embedding the same 84 MB binary twice.
         "--exclude-module",
         "imageio_ffmpeg",
+        "--exclude-module",
+        "PIL.AvifImagePlugin",
+        "--exclude-module",
+        "PIL._avif",
         "--add-data",
-        str(ROOT / "vendor") + ";vendor",
+        str(VENDOR_7ZIP) + ";vendor/tools/7zip",
+        "--add-data",
+        str(VENDOR_FFMPEG_ARCHIVE) + ";vendor/tools/ffmpeg",
         str(ROOT / "app.py"),
     ]
     run(args)
@@ -161,34 +197,43 @@ def build_exe() -> Path:
 
 
 def probe_built_exe(executable: Path) -> None:
-    marker = ROOT / "temp" / "exe_startup_probe.ok"
-    marker.unlink(missing_ok=True)
-    env = os.environ.copy()
-    env["ZIPMKV_STARTUP_PROBE"] = str(marker)
-    creationflags = subprocess.CREATE_NEW_PROCESS_GROUP if os.name == "nt" else 0
-    process = subprocess.Popen(
-        [str(executable)],
-        cwd=executable.parent,
-        env=env,
-        creationflags=creationflags,
-    )
-    try:
-        return_code = process.wait(timeout=45)
-    except subprocess.TimeoutExpired as exc:
-        if os.name == "nt":
-            subprocess.run(
-                ["taskkill", "/PID", str(process.pid), "/T", "/F"],
-                check=False,
-                capture_output=True,
-            )
-        else:
-            process.kill()
-        raise SystemExit("Built EXE startup probe timed out before the first page became ready.") from exc
+    with tempfile.TemporaryDirectory(prefix="exe_probe_", dir=ROOT / "temp") as probe_value:
+        probe_dir = Path(probe_value)
+        probe_executable = probe_dir / executable.name
+        shutil.copy2(executable, probe_executable)
+        marker = probe_dir / "startup.ok"
+        env = os.environ.copy()
+        env["ZIPMKV_STARTUP_PROBE"] = str(marker)
+        env["ZIPMKV_PROBE_TOOLS"] = "1"
+        creationflags = subprocess.CREATE_NEW_PROCESS_GROUP if os.name == "nt" else 0
+        process = subprocess.Popen(
+            [str(probe_executable)],
+            cwd=probe_dir,
+            env=env,
+            creationflags=creationflags,
+        )
+        try:
+            return_code = process.wait(timeout=60)
+        except subprocess.TimeoutExpired as exc:
+            if os.name == "nt":
+                subprocess.run(
+                    ["taskkill", "/PID", str(process.pid), "/T", "/F"],
+                    check=False,
+                    capture_output=True,
+                )
+            else:
+                process.kill()
+            raise SystemExit("Built EXE startup probe timed out before the first page became ready.") from exc
 
-    if return_code != 0:
-        raise SystemExit(f"Built EXE startup probe exited with code {return_code}.")
-    if not marker.exists() or marker.read_text(encoding="utf-8").strip() != "ready":
-        raise SystemExit("Built EXE did not produce its startup-ready marker.")
+        if return_code != 0:
+            raise SystemExit(f"Built EXE startup probe exited with code {return_code}.")
+        marker_value = marker.read_text(encoding="utf-8").strip() if marker.exists() else "missing"
+        if marker_value != "ready":
+            raise SystemExit(f"Built EXE startup probe failed: {marker_value}")
+        if not (probe_dir / "tools" / "ffmpeg" / "ffmpeg.exe").exists():
+            raise SystemExit("Built EXE did not materialize its bundled FFmpeg.")
+        if not (probe_dir / "tools" / "7zip" / "7z.exe").exists():
+            raise SystemExit("Built EXE did not materialize its bundled 7-Zip.")
     print("EXE STARTUP PROBE PASSED")
 
 
@@ -199,6 +244,7 @@ def main() -> None:
         return
     install_dependencies(Path(sys.executable))
     ensure_vendor_ffmpeg()
+    ensure_vendor_ffmpeg_archive()
     smoke_test()
     output_exe = build_exe()
     probe_built_exe(output_exe)

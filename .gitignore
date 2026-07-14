@@ -15,6 +15,7 @@ config/
 
 # Re-created automatically by build_exe.py
 vendor/tools/ffmpeg/ffmpeg.exe
+vendor/tools/ffmpeg/ffmpeg.7z
 
 # Flutter/Dart generated files and project-local toolchain
 mobileapp/toolchain/

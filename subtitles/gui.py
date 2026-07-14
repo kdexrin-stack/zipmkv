@@ -8,7 +8,7 @@ from PIL import Image, ImageTk
 
 from common.file_selection import collect_files_from_inputs
 from common.gui_base import LogFrame, ToolFrame, bind_listbox_delete_menu
-from common.media_tools import describe_ffmpeg, find_ffmpeg, probe_stream_lines, probe_subtitle_streams
+from common.media_tools import describe_ffmpeg, probe_stream_lines, probe_subtitle_streams
 from common.paths import ensure_runtime_dirs
 from common.theme import COLORS
 from common.zhconv import MODES, mode_key_from_label, mode_label
@@ -92,6 +92,12 @@ class FeatureFrame(ToolFrame):
         bottom = ttk.Frame(paned)
         paned.add(top, weight=4)
         paned.add(bottom, weight=2)
+
+        def balance_panes(event) -> None:
+            if event.height >= 480:
+                paned.sashpos(0, int(event.height * 0.56))
+
+        paned.bind("<Configure>", balance_panes)
 
         self.notebook = ttk.Notebook(top, style="Feature.TNotebook")
         self.notebook.pack(fill=tk.BOTH, expand=True)
@@ -421,9 +427,9 @@ class FeatureFrame(ToolFrame):
             stream_spin.configure(state=state)
 
     def refresh_status(self) -> None:
-        ffmpeg = find_ffmpeg()
-        if ffmpeg:
-            self.status_var.set(f"已检测到 FFmpeg，可处理视频内封字幕。{describe_ffmpeg(ffmpeg)}")
+        description = describe_ffmpeg()
+        if description != "未检测到 FFmpeg":
+            self.status_var.set(f"FFmpeg 可用于视频内封字幕。{description}")
         else:
             self.status_var.set("未检测到 FFmpeg；仍可处理单独字幕文件，视频内封字幕需要 FFmpeg。")
 

@@ -15,31 +15,48 @@ class LogFrame(ttk.Frame):
         super().__init__(master, style="Surface.TFrame")
         self.text = scrolledtext.ScrolledText(self, height=12, wrap=tk.WORD)
         self.text.configure(
-            bg=COLORS["surface"],
-            fg=COLORS["text"],
-            insertbackground=COLORS["text"],
-            relief=tk.SOLID,
-            bd=1,
+            bg=COLORS["console"],
+            fg=COLORS["console_text"],
+            insertbackground="#ffffff",
+            selectbackground=COLORS["primary"],
+            selectforeground="#ffffff",
+            relief=tk.FLAT,
+            bd=0,
             highlightthickness=1,
             highlightbackground=COLORS["border"],
+            highlightcolor=COLORS["primary"],
             font=(FONT_FAMILY, BASE_FONT_SIZE),
+            padx=10,
+            pady=8,
         )
         self.text.pack(fill=tk.BOTH, expand=True)
         self._pending: queue.Queue[str] = queue.Queue()
-        self.after(40, self._drain_pending)
+        self._drain_after_id: str | None = self.after(40, self._drain_pending)
+        self.bind("<Destroy>", self._cancel_drain, add="+")
+
+    def _cancel_drain(self, event=None) -> None:
+        if event is not None and event.widget is not self:
+            return
+        if self._drain_after_id is not None:
+            try:
+                self.after_cancel(self._drain_after_id)
+            except tk.TclError:
+                pass
+            self._drain_after_id = None
 
     def _append(self, text: str) -> None:
         self.text.insert(tk.END, text + "\n")
         self.text.see(tk.END)
 
     def _drain_pending(self) -> None:
+        self._drain_after_id = None
         try:
             while True:
                 self._append(self._pending.get_nowait())
         except queue.Empty:
             pass
         try:
-            self.after(40, self._drain_pending)
+            self._drain_after_id = self.after(40, self._drain_pending)
         except tk.TclError:
             pass
 
@@ -83,7 +100,17 @@ def bind_listbox_delete_menu(
     delete_label: str = "删除所选",
 ) -> None:
     configure_listbox(listbox)
-    menu = tk.Menu(listbox, tearoff=0)
+    menu = tk.Menu(
+        listbox,
+        tearoff=0,
+        bg=COLORS["surface"],
+        fg=COLORS["text"],
+        activebackground=COLORS["primary"],
+        activeforeground="#ffffff",
+        relief=tk.FLAT,
+        bd=1,
+        font=(FONT_FAMILY, BASE_FONT_SIZE),
+    )
     menu.add_command(label=delete_label, command=delete_selected)
     if clear_all:
         menu.add_separator()
@@ -113,12 +140,24 @@ class ToolFrame(ttk.Frame):
     description = ""
 
     def __init__(self, master):
-        super().__init__(master, padding=14, style="Surface.TFrame")
+        super().__init__(master, padding=18, style="Workspace.TFrame")
         self.log_frame = LogFrame(self)
         self._ui_pending: queue.Queue[object] = queue.Queue()
-        self.after(40, self._drain_ui_pending)
+        self._ui_after_id: str | None = self.after(40, self._drain_ui_pending)
+        self.bind("<Destroy>", self._cancel_ui_drain, add="+")
+
+    def _cancel_ui_drain(self, event=None) -> None:
+        if event is not None and event.widget is not self:
+            return
+        if self._ui_after_id is not None:
+            try:
+                self.after_cancel(self._ui_after_id)
+            except tk.TclError:
+                pass
+            self._ui_after_id = None
 
     def _drain_ui_pending(self) -> None:
+        self._ui_after_id = None
         try:
             while True:
                 callback = self._ui_pending.get_nowait()
@@ -128,7 +167,7 @@ class ToolFrame(ttk.Frame):
         except tk.TclError:
             return
         try:
-            self.after(40, self._drain_ui_pending)
+            self._ui_after_id = self.after(40, self._drain_ui_pending)
         except tk.TclError:
             pass
 
@@ -137,6 +176,7 @@ class ToolFrame(ttk.Frame):
 
     def run_background(self, button: tk.Widget, job, done_message: str = "处理完成") -> None:
         button.config(state=tk.DISABLED)
+        self._set_app_status("正在处理，请稍候")
 
         def worker():
             try:
@@ -144,15 +184,22 @@ class ToolFrame(ttk.Frame):
                 with contextlib.redirect_stdout(stream), contextlib.redirect_stderr(stream):
                     message = job() or done_message
                 stream.flush()
+                self.call_in_ui(lambda: self._set_app_status(message))
                 self.call_in_ui(lambda: messagebox.showinfo("完成", message))
             except Exception as exc:
                 error_message = str(exc)
                 self.log_frame.write(f"任务失败: {error_message}")
-                self.call_in_ui(lambda: messagebox.showerror("错误", error_message))
+                self.call_in_ui(lambda: self._set_app_status("处理失败，请查看日志"))
+                self.call_in_ui(lambda value=error_message: messagebox.showerror("错误", value))
             finally:
                 self.call_in_ui(lambda: button.config(state=tk.NORMAL))
 
         threading.Thread(target=worker, daemon=True).start()
+
+    def _set_app_status(self, message: str) -> None:
+        status_var = getattr(self.winfo_toplevel(), "status_var", None)
+        if status_var is not None:
+            status_var.set(message)
 
 
 class ArchiveToolSelector(ttk.LabelFrame):

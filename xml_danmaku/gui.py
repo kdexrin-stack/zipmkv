@@ -32,8 +32,6 @@ class FeatureFrame(ToolFrame):
         self._build()
 
     def _build(self) -> None:
-        ttk.Label(self, text=self.description).pack(anchor=tk.W)
-
         file_frame = ttk.LabelFrame(self, text="文件", padding=6)
         file_frame.pack(fill=tk.BOTH, expand=False, pady=8)
         file_buttons = ttk.Frame(file_frame)

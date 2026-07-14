@@ -42,8 +42,6 @@ class FeatureFrame(ToolFrame):
         self.refresh_preview()
 
     def _build(self) -> None:
-        ttk.Label(self, text=self.description).pack(anchor=tk.W)
-
         mode_frame = ttk.LabelFrame(self, text="命名方式", padding=8)
         mode_frame.pack(fill=tk.X, pady=(8, 6))
         ttk.Radiobutton(

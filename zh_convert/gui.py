@@ -28,8 +28,6 @@ class FeatureFrame(ToolFrame):
         self._build()
 
     def _build(self) -> None:
-        ttk.Label(self, text=self.description).pack(anchor=tk.W)
-
         top = ttk.Frame(self)
         top.pack(fill=tk.BOTH, expand=False, pady=8)
 
