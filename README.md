@@ -95,6 +95,7 @@ python .\build_exe.py
 - 检查并准备项目内置 7-Zip
 - 运行烟测
 - 生成单文件 `dist/zipmkv.exe`
+- 启动生成的 EXE 并验证首屏事件循环能够正常完成
 
 不需要手动激活 venv。
 

@@ -27,7 +27,7 @@ def in_build_venv() -> bool:
         return False
 
 
-def run(args: list[str], cwd: Path = ROOT) -> None:
+def run(args: list[str], cwd: Path = ROOT, timeout: int | None = None) -> None:
     print(">>> " + " ".join(args))
     env = os.environ.copy()
     env["PIP_CACHE_DIR"] = str(ROOT / ".cache" / "pip")
@@ -37,7 +37,7 @@ def run(args: list[str], cwd: Path = ROOT) -> None:
     Path(env["PIP_CACHE_DIR"]).mkdir(parents=True, exist_ok=True)
     Path(env["PYINSTALLER_CONFIG_DIR"]).mkdir(parents=True, exist_ok=True)
     Path(env["TEMP"]).mkdir(parents=True, exist_ok=True)
-    subprocess.run(args, cwd=cwd, check=True, env=env)
+    subprocess.run(args, cwd=cwd, check=True, env=env, timeout=timeout)
 
 
 def ensure_venv() -> Path:
@@ -103,7 +103,7 @@ def smoke_test() -> None:
     run([sys.executable, "-B", str(ROOT / "smoke_test.py")])
 
 
-def build_exe() -> None:
+def build_exe() -> Path:
     build_name = "zipmkv"
     try:
         if DIST_EXE.exists():
@@ -157,6 +157,39 @@ def build_exe() -> None:
         raise SystemExit(f"Build finished but exe was not found: {output_exe}")
     print(f"\nDONE: {output_exe}")
     print(f"SIZE: {output_exe.stat().st_size / 1024 / 1024:.1f} MB")
+    return output_exe
+
+
+def probe_built_exe(executable: Path) -> None:
+    marker = ROOT / "temp" / "exe_startup_probe.ok"
+    marker.unlink(missing_ok=True)
+    env = os.environ.copy()
+    env["ZIPMKV_STARTUP_PROBE"] = str(marker)
+    creationflags = subprocess.CREATE_NEW_PROCESS_GROUP if os.name == "nt" else 0
+    process = subprocess.Popen(
+        [str(executable)],
+        cwd=executable.parent,
+        env=env,
+        creationflags=creationflags,
+    )
+    try:
+        return_code = process.wait(timeout=45)
+    except subprocess.TimeoutExpired as exc:
+        if os.name == "nt":
+            subprocess.run(
+                ["taskkill", "/PID", str(process.pid), "/T", "/F"],
+                check=False,
+                capture_output=True,
+            )
+        else:
+            process.kill()
+        raise SystemExit("Built EXE startup probe timed out before the first page became ready.") from exc
+
+    if return_code != 0:
+        raise SystemExit(f"Built EXE startup probe exited with code {return_code}.")
+    if not marker.exists() or marker.read_text(encoding="utf-8").strip() != "ready":
+        raise SystemExit("Built EXE did not produce its startup-ready marker.")
+    print("EXE STARTUP PROBE PASSED")
 
 
 def main() -> None:
@@ -167,7 +200,8 @@ def main() -> None:
     install_dependencies(Path(sys.executable))
     ensure_vendor_ffmpeg()
     smoke_test()
-    build_exe()
+    output_exe = build_exe()
+    probe_built_exe(output_exe)
 
 
 if __name__ == "__main__":

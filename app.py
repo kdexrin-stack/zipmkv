@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import importlib
+import os
 import sys
 import tkinter as tk
 from pathlib import Path
@@ -31,6 +32,21 @@ class ZipMkvApp(tk.Tk):
         self.feature_by_iid: dict[str, FeatureSpec] = {}
         self._build()
         self.load_feature(FEATURES[0])
+        self._schedule_startup_probe()
+
+    def _schedule_startup_probe(self) -> None:
+        marker_value = os.environ.get("ZIPMKV_STARTUP_PROBE")
+        if not marker_value:
+            return
+
+        marker = Path(marker_value)
+
+        def complete_probe() -> None:
+            marker.parent.mkdir(parents=True, exist_ok=True)
+            marker.write_text("ready\n", encoding="utf-8")
+            self.destroy()
+
+        self.after(500, complete_probe)
 
     def _build(self) -> None:
         root = ttk.Frame(self, style="App.TFrame")
@@ -98,6 +114,8 @@ class ZipMkvApp(tk.Tk):
         self.load_feature(feature)
 
     def load_feature(self, feature: FeatureSpec) -> None:
+        if self.current_feature == feature and self.current_frame is not None:
+            return
         if self.current_frame:
             self.current_frame.destroy()
             self.current_frame = None
