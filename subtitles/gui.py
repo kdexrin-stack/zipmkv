@@ -27,6 +27,9 @@ from .core import (
 
 
 TARGET_EXTENSIONS = SUBTITLE_EXTENSIONS | VIDEO_EXTENSIONS
+VIDEO_ACTION_MODIFY = "修改字幕后封装"
+VIDEO_ACTION_ADD = "直接添加字幕"
+VIDEO_ACTION_REMOVE = "删除视频字幕轨"
 
 
 class FeatureFrame(ToolFrame):
@@ -43,14 +46,23 @@ class FeatureFrame(ToolFrame):
         self.sample_folders: list[str] = []
         self.sample_excluded: set[str] = set()
         self.sample_display_items: list[tuple[str, str]] = []
+        self.video_source_files: list[str] = []
+        self.video_source_folders: list[str] = []
+        self.video_source_excluded: set[str] = set()
+        self.video_source_display_items: list[tuple[str, str]] = []
+        self.video_sample_files: list[str] = []
+        self.video_sample_folders: list[str] = []
+        self.video_sample_excluded: set[str] = set()
+        self.video_sample_display_items: list[tuple[str, str]] = []
         self.mux_video_files: list[str] = []
         self.mux_video_folders: list[str] = []
         self.mux_video_excluded: set[str] = set()
         self.mux_video_display_items: list[tuple[str, str]] = []
         self.output_var = tk.StringVar()
+        self.video_output_var = tk.StringVar()
         self.output_format_var = tk.StringVar(value="same")
         self.text_conversion_var = tk.StringVar(value="不转换")
-        self.video_action_var = tk.StringVar(value="修改后封装到指定视频")
+        self.video_action_var = tk.StringVar(value=VIDEO_ACTION_MODIFY)
         self.video_source_var = tk.StringVar(value="尚未选择字幕来源")
         self.replace_video_subtitles_var = tk.BooleanVar(value=False)
         self.stream_var = tk.IntVar(value=0)
@@ -249,24 +261,50 @@ class FeatureFrame(ToolFrame):
         operation_frame = ttk.LabelFrame(body, text="1. 视频操作", padding=8)
         operation_frame.pack(fill=tk.X, pady=8)
         operation_frame.columnconfigure(1, weight=1)
-        ttk.Label(operation_frame, text="字幕来源").grid(row=0, column=0, sticky=tk.W, pady=4)
-        ttk.Label(operation_frame, textvariable=self.video_source_var, style="Muted.TLabel").grid(row=0, column=1, sticky=tk.W, padx=6)
-        ttk.Button(operation_frame, text="选择字幕来源", command=lambda: self.notebook.select(self.style_tab)).grid(row=0, column=2)
-        ttk.Label(operation_frame, text="操作").grid(row=1, column=0, sticky=tk.W, pady=4)
+        ttk.Label(operation_frame, text="操作").grid(row=0, column=0, sticky=tk.W, pady=4)
         ttk.Combobox(
             operation_frame,
             textvariable=self.video_action_var,
-            values=["修改后封装到指定视频", "仅添加目标字幕到指定视频", "删除指定视频内封字幕"],
+            values=[VIDEO_ACTION_MODIFY, VIDEO_ACTION_ADD, VIDEO_ACTION_REMOVE],
             state="readonly",
-            width=28,
-        ).grid(row=1, column=1, sticky=tk.W, padx=6)
+            width=20,
+        ).grid(row=0, column=1, sticky=tk.W, padx=6)
         ttk.Checkbutton(
             operation_frame,
             text="封装时替换原字幕轨",
             variable=self.replace_video_subtitles_var,
-        ).grid(row=1, column=2, sticky=tk.W)
+        ).grid(row=0, column=2, sticky=tk.W)
 
-        mux_frame = ttk.LabelFrame(body, text="2. 目标视频", padding=8)
+        source_frame = ttk.LabelFrame(body, text="2. 字幕来源", padding=8)
+        source_frame.pack(fill=tk.X, pady=6)
+        source_frame.columnconfigure(0, weight=1)
+        source_buttons = ttk.Frame(source_frame)
+        source_buttons.grid(row=0, column=0, sticky=tk.W, pady=4)
+        ttk.Button(source_buttons, text="选择单/多个字幕或视频", command=self.choose_video_sources).pack(side=tk.LEFT)
+        ttk.Button(source_buttons, text="选择文件夹扫描", command=self.choose_video_source_folder).pack(side=tk.LEFT, padx=6)
+        ttk.Label(source_buttons, textvariable=self.video_source_var, style="Muted.TLabel").pack(side=tk.LEFT, padx=8)
+        self.video_source_list = tk.Listbox(source_frame, height=4, exportselection=False)
+        self.video_source_list.grid(row=1, column=0, sticky=tk.EW, pady=4)
+        bind_listbox_delete_menu(
+            self.video_source_list,
+            self.delete_selected_video_sources,
+            self.clear_video_sources,
+        )
+
+        video_sample_buttons = ttk.Frame(source_frame)
+        video_sample_buttons.grid(row=2, column=0, sticky=tk.W, pady=(8, 4))
+        ttk.Label(video_sample_buttons, text="示例样式（可选）").pack(side=tk.LEFT)
+        ttk.Button(video_sample_buttons, text="选择单/多个", command=self.choose_video_samples).pack(side=tk.LEFT, padx=6)
+        ttk.Button(video_sample_buttons, text="选择文件夹", command=self.choose_video_sample_folder).pack(side=tk.LEFT)
+        self.video_sample_list = tk.Listbox(source_frame, height=3, exportselection=False)
+        self.video_sample_list.grid(row=3, column=0, sticky=tk.EW, pady=4)
+        bind_listbox_delete_menu(
+            self.video_sample_list,
+            self.delete_selected_video_samples,
+            self.clear_video_samples,
+        )
+
+        mux_frame = ttk.LabelFrame(body, text="3. 目标视频", padding=8)
         mux_frame.pack(fill=tk.X, pady=6)
         mux_frame.columnconfigure(0, weight=1)
         video_buttons = ttk.Frame(mux_frame)
@@ -277,19 +315,25 @@ class FeatureFrame(ToolFrame):
         self.mux_video_list.grid(row=1, column=0, sticky=tk.EW, pady=4)
         bind_listbox_delete_menu(self.mux_video_list, self.delete_selected_mux_videos, self.clear_mux_videos)
 
-        track_frame = ttk.LabelFrame(body, text="3. 轨道范围", padding=8)
+        track_frame = ttk.LabelFrame(body, text="4. 输出与轨道范围", padding=8)
         track_frame.pack(fill=tk.X, pady=6)
+        track_frame.columnconfigure(1, weight=1)
+        ttk.Label(track_frame, text="输出目录").grid(row=0, column=0, sticky=tk.W, pady=4)
+        ttk.Entry(track_frame, textvariable=self.video_output_var).grid(row=0, column=1, sticky=tk.EW, padx=6)
+        ttk.Button(track_frame, text="选择", command=self.choose_video_output).grid(row=0, column=2)
         ttk.Checkbutton(
             track_frame,
             text="全部字幕轨道",
             variable=self.all_tracks_var,
             command=self.update_track_state,
-        ).pack(side=tk.LEFT)
-        ttk.Label(track_frame, text="单轨序号").pack(side=tk.LEFT, padx=(24, 5))
-        stream_spin = ttk.Spinbox(track_frame, from_=0, to=20, width=5, textvariable=self.stream_var)
+        ).grid(row=1, column=0, sticky=tk.W, pady=4)
+        track_controls = ttk.Frame(track_frame)
+        track_controls.grid(row=1, column=1, columnspan=2, sticky=tk.W)
+        ttk.Label(track_controls, text="单轨序号").pack(side=tk.LEFT, padx=(0, 5))
+        stream_spin = ttk.Spinbox(track_controls, from_=0, to=20, width=5, textvariable=self.stream_var)
         stream_spin.pack(side=tk.LEFT)
         self.stream_spins.append(stream_spin)
-        ttk.Label(track_frame, text="所有结果输出为新 MKV，源视频保持不变。", style="Muted.TLabel").pack(side=tk.LEFT, padx=20)
+        ttk.Label(track_controls, text="所有结果输出为新 MKV，源视频保持不变。", style="Muted.TLabel").pack(side=tk.LEFT, padx=20)
 
         ttk.Label(body, textvariable=self.status_var, style="Muted.TLabel", wraplength=900).pack(fill=tk.X, pady=8)
 
@@ -441,6 +485,22 @@ class FeatureFrame(ToolFrame):
         files = collect_files_from_inputs(self.sample_files, self.sample_folders, extensions=TARGET_EXTENSIONS)
         return [path for path in files if str(path.resolve()).casefold() not in self.sample_excluded]
 
+    def _current_video_sources(self) -> list[Path]:
+        files = collect_files_from_inputs(
+            self.video_source_files,
+            self.video_source_folders,
+            extensions=TARGET_EXTENSIONS,
+        )
+        return [path for path in files if str(path.resolve()).casefold() not in self.video_source_excluded]
+
+    def _current_video_samples(self) -> list[Path]:
+        files = collect_files_from_inputs(
+            self.video_sample_files,
+            self.video_sample_folders,
+            extensions=TARGET_EXTENSIONS,
+        )
+        return [path for path in files if str(path.resolve()).casefold() not in self.video_sample_excluded]
+
     def choose_targets(self) -> None:
         paths = filedialog.askopenfilenames(
             title="选择目标字幕或视频",
@@ -494,13 +554,6 @@ class FeatureFrame(ToolFrame):
             self.target_display_items.append(("folder", folder))
             self.target_list.insert(tk.END, f"[文件夹] {folder}")
 
-        subtitle_count = sum(1 for path in target_paths if is_subtitle(path))
-        video_count = sum(1 for path in target_paths if is_video(path))
-        if target_paths:
-            self.video_source_var.set(f"样式页目标 {len(target_paths)} 个（字幕 {subtitle_count} / 视频 {video_count}）")
-        else:
-            self.video_source_var.set("尚未选择字幕来源")
-
         sample_paths = self._current_samples()
         self.sample_display_items = []
         self.sample_list.delete(0, tk.END)
@@ -510,6 +563,32 @@ class FeatureFrame(ToolFrame):
         for folder in self.sample_folders:
             self.sample_display_items.append(("folder", folder))
             self.sample_list.insert(tk.END, f"[示例文件夹] {folder}")
+
+        video_sources = self._current_video_sources()
+        self.video_source_display_items = []
+        self.video_source_list.delete(0, tk.END)
+        for path in video_sources:
+            self.video_source_display_items.append(("file", str(path)))
+            self.video_source_list.insert(tk.END, str(path))
+        for folder in self.video_source_folders:
+            self.video_source_display_items.append(("folder", folder))
+            self.video_source_list.insert(tk.END, f"[字幕来源文件夹] {folder}")
+        subtitle_count = sum(1 for path in video_sources if is_subtitle(path))
+        video_count = sum(1 for path in video_sources if is_video(path))
+        if video_sources:
+            self.video_source_var.set(f"已选 {len(video_sources)} 个（字幕 {subtitle_count} / 视频 {video_count}）")
+        else:
+            self.video_source_var.set("尚未选择字幕来源")
+
+        video_samples = self._current_video_samples()
+        self.video_sample_display_items = []
+        self.video_sample_list.delete(0, tk.END)
+        for index, path in enumerate(video_samples, 1):
+            self.video_sample_display_items.append(("file", str(path)))
+            self.video_sample_list.insert(tk.END, f"{index}. {path.suffix.lower()} | {path}")
+        for folder in self.video_sample_folders:
+            self.video_sample_display_items.append(("folder", folder))
+            self.video_sample_list.insert(tk.END, f"[视频页示例文件夹] {folder}")
 
         self.mux_video_display_items = []
         self.mux_video_list.delete(0, tk.END)
@@ -557,6 +636,24 @@ class FeatureFrame(ToolFrame):
             self.sample_excluded,
         )
 
+    def delete_selected_video_sources(self) -> None:
+        self._delete_selected(
+            self.video_source_list,
+            self.video_source_display_items,
+            self.video_source_files,
+            self.video_source_folders,
+            self.video_source_excluded,
+        )
+
+    def delete_selected_video_samples(self) -> None:
+        self._delete_selected(
+            self.video_sample_list,
+            self.video_sample_display_items,
+            self.video_sample_files,
+            self.video_sample_folders,
+            self.video_sample_excluded,
+        )
+
     def clear_targets(self) -> None:
         self.target_files = []
         self.target_folders = []
@@ -569,10 +666,69 @@ class FeatureFrame(ToolFrame):
         self.sample_excluded.clear()
         self.refresh_lists()
 
+    def clear_video_sources(self) -> None:
+        self.video_source_files = []
+        self.video_source_folders = []
+        self.video_source_excluded.clear()
+        self.refresh_lists()
+
+    def clear_video_samples(self) -> None:
+        self.video_sample_files = []
+        self.video_sample_folders = []
+        self.video_sample_excluded.clear()
+        self.refresh_lists()
+
     def choose_output(self) -> None:
         path = filedialog.askdirectory(title="选择输出目录")
         if path:
             self.output_var.set(path)
+
+    def choose_video_sources(self) -> None:
+        paths = filedialog.askopenfilenames(
+            title="选择视频页字幕来源",
+            filetypes=[
+                ("字幕/视频", "*.ass *.ssa *.srt *.vtt *.skrt *.mkv *.mp4 *.mov *.avi *.wmv *.flv *.webm *.m4v"),
+                ("所有文件", "*.*"),
+            ],
+        )
+        if paths:
+            self.video_source_files.extend(list(paths))
+            self.refresh_lists()
+
+    def choose_video_source_folder(self) -> None:
+        path = filedialog.askdirectory(title="选择包含字幕来源的文件夹")
+        if path:
+            self.video_source_folders.append(path)
+            self.refresh_lists()
+
+    def choose_video_samples(self) -> None:
+        paths = filedialog.askopenfilenames(
+            title="选择视频页示例字幕或视频",
+            filetypes=[
+                ("字幕/视频", "*.ass *.ssa *.srt *.vtt *.skrt *.mkv *.mp4 *.mov *.avi *.wmv *.flv *.webm *.m4v"),
+                ("所有文件", "*.*"),
+            ],
+        )
+        if paths:
+            self.video_sample_files.extend(list(paths))
+            if self.style_mode_var.get() == "manual":
+                self.style_mode_var.set("sample_manual" if self.has_manual_overrides() else "sample")
+                self.update_option_states()
+            self.refresh_lists()
+
+    def choose_video_sample_folder(self) -> None:
+        path = filedialog.askdirectory(title="选择包含视频页示例的文件夹")
+        if path:
+            self.video_sample_folders.append(path)
+            if self.style_mode_var.get() == "manual":
+                self.style_mode_var.set("sample_manual" if self.has_manual_overrides() else "sample")
+                self.update_option_states()
+            self.refresh_lists()
+
+    def choose_video_output(self) -> None:
+        path = filedialog.askdirectory(title="选择视频操作输出目录")
+        if path:
+            self.video_output_var.set(path)
 
     def choose_mux_videos(self) -> None:
         paths = filedialog.askopenfilenames(
@@ -634,20 +790,30 @@ class FeatureFrame(ToolFrame):
                 self.log_frame.write(f"  检测失败: {exc}")
         return subtitle_source_count + total_subtitle_streams
 
-    def _probe_all_videos_job(self) -> str:
-        self.log_frame.write("开始检测字幕源和视频内封轨道...")
-        target_count = self._probe_video_group("目标", self._current_targets())
-        sample_count = self._probe_video_group("示例", self._current_samples())
-        mux_count = self._probe_video_group("封装视频", self._current_mux_videos())
-        message = f"检测完成：目标 {target_count}，示例 {sample_count}，封装视频字幕轨 {mux_count}。"
+    def _probe_workspace_job(self, workspace: str) -> str:
+        self.log_frame.write("开始检测当前页面的字幕源和视频内封轨道...")
+        if workspace == "video":
+            source_count = self._probe_video_group("视频页字幕来源", self._current_video_sources())
+            sample_count = self._probe_video_group("视频页示例", self._current_video_samples())
+            video_count = self._probe_video_group("视频页目标视频", self._current_mux_videos())
+            message = (
+                f"视频页检测完成：字幕来源 {source_count}，示例 {sample_count}，"
+                f"目标视频字幕轨 {video_count}。"
+            )
+        else:
+            target_count = self._probe_video_group("样式页目标", self._current_targets())
+            sample_count = self._probe_video_group("样式页示例", self._current_samples())
+            message = f"样式页检测完成：目标 {target_count}，示例 {sample_count}。"
         self.log_frame.write(message)
         return message
 
     def probe_all_videos(self, button: tk.Widget | None = None) -> None:
+        workspace = "style" if self.notebook.index("current") == 0 else "video"
+        job = lambda: self._probe_workspace_job(workspace)
         if button is None:
-            self._probe_all_videos_job()
+            job()
             return
-        self.run_background(button, self._probe_all_videos_job)
+        self.run_background(button, job)
 
     def update_preview(self, outputs: list[Path]) -> None:
         subtitle_output = next(
@@ -719,12 +885,18 @@ class FeatureFrame(ToolFrame):
         self.mux_video_excluded.clear()
         self.refresh_lists()
 
-    def _delete_video_tracks_job(self, videos: list[Path]) -> str:
+    def _delete_video_tracks_job(
+        self,
+        videos: list[Path],
+        output_dir: str | None,
+        all_tracks: bool,
+        stream_index: int,
+    ) -> str:
         outputs = remove_subtitle_tracks_from_videos(
             videos,
-            self.output_var.get() or None,
-            all_subtitle_streams=self.all_tracks_var.get(),
-            subtitle_stream=self.stream_var.get(),
+            output_dir,
+            all_subtitle_streams=all_tracks,
+            subtitle_stream=stream_index,
             log=self.log_frame.write,
         )
         self.log_frame.write("完成输出:")
@@ -732,13 +904,19 @@ class FeatureFrame(ToolFrame):
             self.log_frame.write(str(output))
         return f"删除完成，生成 {len(outputs)} 个 MKV。"
 
-    def _add_target_subtitles_job(self, targets: list[Path], videos: list[Path]) -> str:
-        subtitles = [path for path in targets if is_subtitle(path)]
+    def _add_target_subtitles_job(
+        self,
+        sources: list[Path],
+        videos: list[Path],
+        output_dir: str | None,
+        replace_existing: bool,
+    ) -> str:
+        subtitles = [path for path in sources if is_subtitle(path)]
         outputs = mux_subtitles_into_videos(
             subtitles,
             videos,
-            self.output_var.get() or None,
-            replace_existing_subtitles=self.replace_video_subtitles_var.get(),
+            output_dir,
+            replace_existing_subtitles=replace_existing,
             log=self.log_frame.write,
         )
         self.log_frame.write("完成输出:")
@@ -750,24 +928,25 @@ class FeatureFrame(ToolFrame):
         self,
         targets: list[Path],
         samples: list[Path],
-        *,
-        remux_video: bool,
+        options: StyleOptions,
+        output_dir: str | None,
+        style_mode: str,
     ) -> list[Path]:
         self.log_frame.write("开始处理字幕样式...")
-        if self.output_format_var.get().casefold() in {"srt", "vtt"}:
+        if options.output_format.casefold() in {"srt", "vtt"}:
             self.log_frame.write("提示：SRT/VTT 不保存字体、颜色、描边；需要视觉样式请输出 ASS。")
-        if self.style_mode_var.get() in {"sample", "sample_manual"}:
+        if style_mode in {"sample", "sample_manual"}:
             self.log_frame.write("示例模式：SRT/VTT 示例只提供文本结构，ASS/SSA 示例可提供完整视觉样式。")
-        if self.style_mode_var.get() == "sample_manual":
+        if style_mode == "sample_manual":
             self.log_frame.write("示例 + 手动覆盖：冲突参数以手动填写为准，留空参数沿用示例。")
-        conversion_mode = mode_key_from_label(self.text_conversion_var.get())
+        conversion_mode = options.text_conversion_mode
         if conversion_mode != "none":
             self.log_frame.write(f"文字繁简转换：{mode_label(conversion_mode)}。")
 
         outputs = modify_many(
             targets,
-            self.output_var.get() or None,
-            self.build_options(remux_video=remux_video),
+            output_dir,
+            options,
             sample_paths=samples,
             log=self.log_frame.write,
         )
@@ -783,12 +962,17 @@ class FeatureFrame(ToolFrame):
         if not targets:
             messagebox.showwarning("未选择目标", "请先在“字幕样式”页选择目标字幕或视频。")
             return
+        options = self.build_options()
+        output_dir = self.output_var.get() or None
+        style_mode = self.style_mode_var.get()
 
         def job() -> str:
             outputs = self._modify_targets_job(
                 targets,
                 samples,
-                remux_video=self.remux_var.get(),
+                options,
+                output_dir,
+                style_mode,
             )
             self.log_frame.write("完成输出:")
             for output in outputs:
@@ -798,48 +982,77 @@ class FeatureFrame(ToolFrame):
         self.run_background(button, job)
 
     def start_video(self, button: tk.Widget) -> None:
-        targets = self._current_targets()
-        samples = self._current_samples()
+        sources = self._current_video_sources()
+        samples = self._current_video_samples()
         mux_videos = self._current_mux_videos()
-        target_videos = [path for path in targets if is_video(path)]
         action = self.video_action_var.get()
+        output_dir = self.video_output_var.get() or None
+        all_tracks = self.all_tracks_var.get()
+        stream_index = self.stream_var.get()
+        replace_existing = self.replace_video_subtitles_var.get()
 
-        if action == "删除指定视频内封字幕":
-            videos = mux_videos or target_videos
-            if not videos:
+        if action == VIDEO_ACTION_REMOVE:
+            if not mux_videos:
                 messagebox.showwarning("未选择视频", "请在“视频轨道与封装”页选择要删除字幕轨的视频。")
                 return
-            self.run_background(button, lambda: self._delete_video_tracks_job(videos))
+            self.run_background(
+                button,
+                lambda: self._delete_video_tracks_job(
+                    mux_videos,
+                    output_dir,
+                    all_tracks,
+                    stream_index,
+                ),
+            )
             return
 
         if not mux_videos:
             messagebox.showwarning("未选择视频", "请先在“视频轨道与封装”页选择目标视频。")
             return
 
-        if action == "仅添加目标字幕到指定视频":
-            if not any(is_subtitle(path) for path in targets):
-                messagebox.showwarning("未选择字幕", "请到“字幕样式”页选择要追加的单独字幕文件。")
+        if action == VIDEO_ACTION_ADD:
+            if not any(is_subtitle(path) for path in sources):
+                messagebox.showwarning("未选择字幕", "请在当前页的“字幕来源”中选择要添加的单独字幕文件。")
                 return
-            self.run_background(button, lambda: self._add_target_subtitles_job(targets, mux_videos))
+            self.run_background(
+                button,
+                lambda: self._add_target_subtitles_job(
+                    sources,
+                    mux_videos,
+                    output_dir,
+                    replace_existing,
+                ),
+            )
             return
 
-        if action != "修改后封装到指定视频":
+        if action != VIDEO_ACTION_MODIFY:
             messagebox.showwarning("未选择操作", "请选择一个视频操作。")
             return
-        if not targets:
-            messagebox.showwarning("未选择字幕来源", "请到“字幕样式”页选择要修改并封装的字幕或视频。")
+        if not sources:
+            messagebox.showwarning("未选择字幕来源", "请在当前页选择要修改并封装的字幕或视频。")
             return
+        style_mode = self.style_mode_var.get()
+        if style_mode in {"sample", "sample_manual"} and not samples:
+            messagebox.showwarning("未选择示例", "当前样式模式需要示例，请在当前页选择示例字幕或视频。")
+            return
+        options = self.build_options(remux_video=False)
 
         def job() -> str:
-            outputs = self._modify_targets_job(targets, samples, remux_video=False)
+            outputs = self._modify_targets_job(
+                sources,
+                samples,
+                options,
+                output_dir,
+                style_mode,
+            )
             subtitle_outputs = [path for path in outputs if is_subtitle(path)]
             if not subtitle_outputs:
                 raise RuntimeError("字幕修改完成，但没有可用于封装的字幕输出。")
             mux_outputs = mux_subtitles_into_videos(
                 subtitle_outputs,
                 mux_videos,
-                self.output_var.get() or None,
-                replace_existing_subtitles=self.replace_video_subtitles_var.get(),
+                output_dir,
+                replace_existing_subtitles=replace_existing,
                 log=self.log_frame.write,
             )
             self.log_frame.write("完成输出:")

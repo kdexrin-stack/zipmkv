@@ -15,7 +15,7 @@ from common.paths import ensure_runtime_dirs
 from common.theme import COLORS, FONT_FAMILY, apply_app_theme, enable_high_dpi_awareness
 from features import FEATURES, FeatureSpec
 
-APP_VERSION = "1.1.1"
+APP_VERSION = "1.1.2"
 
 
 class ZipMkvApp(tk.Tk):

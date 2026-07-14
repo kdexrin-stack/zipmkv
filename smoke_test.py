@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import shutil
 import sys
+import tkinter as tk
 import zipfile
 from pathlib import Path
 
@@ -21,6 +22,7 @@ from rename_files.core import ManualRenameRule, build_manual_pairs, build_pairs,
 from subtitles.core import StyleOptions, modify_subtitle_or_video
 from subtitles.core import modify_many
 from subtitles.core import mux_subtitles_into_videos, remove_subtitle_tracks_from_videos
+from subtitles.gui import FeatureFrame, VIDEO_ACTION_ADD, VIDEO_ACTION_REMOVE
 from zh_convert.core import convert_many as convert_zh_many
 from xml_danmaku.core import DanmakuOptions, process_xml_files
 
@@ -361,6 +363,66 @@ def smoke_subtitles(base: Path) -> None:
             raise AssertionError("video subtitle delete failed")
 
 
+def smoke_subtitle_workspace_independence(base: Path) -> None:
+    source = base / "subtitle_workspace"
+    source.mkdir(parents=True, exist_ok=True)
+    style_source = source / "style-page.srt"
+    video_source = source / "video-page.srt"
+    video_sample = source / "video-sample.ass"
+    target_video = source / "target.mkv"
+    for path in (style_source, video_source, video_sample, target_video):
+        path.write_text("fixture", encoding="utf-8")
+
+    root = tk.Tk()
+    root.withdraw()
+    frame = FeatureFrame(root)
+    frame.pack(fill=tk.BOTH, expand=True)
+    root.update_idletasks()
+    try:
+        frame.target_files = [str(style_source)]
+        frame.video_source_files = [str(video_source)]
+        frame.video_sample_files = [str(video_sample)]
+        frame.mux_video_files = [str(target_video)]
+        frame.refresh_lists()
+        if frame._current_targets() != [style_source]:
+            raise AssertionError("style workspace target state failed")
+        if frame._current_video_sources() != [video_source]:
+            raise AssertionError("video workspace source is not independent")
+        if frame._current_video_samples() != [video_sample]:
+            raise AssertionError("video workspace sample is not independent")
+        if frame._current_mux_videos() != [target_video]:
+            raise AssertionError("video workspace target state failed")
+
+        frame.clear_targets()
+        if frame._current_video_sources() != [video_source]:
+            raise AssertionError("clearing style targets changed video sources")
+
+        captured: dict[str, object] = {}
+        frame.run_background = lambda _button, job: job()
+        frame._add_target_subtitles_job = lambda sources, videos, output, replace: captured.update(
+            action="add",
+            sources=sources,
+            videos=videos,
+        ) or "ok"
+        frame.video_action_var.set(VIDEO_ACTION_ADD)
+        frame.start_video(frame.primary_action_button)
+        if captured.get("sources") != [video_source] or captured.get("videos") != [target_video]:
+            raise AssertionError("video add action read files from another workspace")
+
+        frame.clear_video_sources()
+        captured.clear()
+        frame._delete_video_tracks_job = lambda videos, output, all_tracks, stream: captured.update(
+            action="remove",
+            videos=videos,
+        ) or "ok"
+        frame.video_action_var.set(VIDEO_ACTION_REMOVE)
+        frame.start_video(frame.primary_action_button)
+        if captured.get("videos") != [target_video]:
+            raise AssertionError("video remove action incorrectly required a subtitle source")
+    finally:
+        root.destroy()
+
+
 def main() -> None:
     runtime = ensure_runtime_dirs()
     base = runtime["temp"] / "smoke_test"
@@ -377,6 +439,7 @@ def main() -> None:
         ("批量文件重命名", smoke_rename_files),
         ("XML 弹幕批量处理", smoke_xml_danmaku),
         ("字幕样式修改", smoke_subtitles),
+        ("视频轨道页面独立选择", smoke_subtitle_workspace_independence),
     ]
 
     for name, test in tests:

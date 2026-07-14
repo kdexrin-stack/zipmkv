@@ -1,6 +1,6 @@
-zipmkv 1.1.1 release artifacts
+zipmkv 1.1.2 release artifacts
 
-8cd6d9e3b3d163af9659e4893e9c3b604602de7b449be028dd409a63947b00d6  zipmkv.exe
+1e3728c754848c926a5184ede86e4988ab5c2da9baf8c73a656767271bede264  zipmkv.exe
 6853a86b9605f68b71912a7de6c39a321239ee6fa7b2e0f32d821998429730dc  zipmkv-android-v1.0.0.apk
 
 The HarmonyOS HAP is intentionally absent. It must be built with an official
