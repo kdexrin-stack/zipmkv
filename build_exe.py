@@ -143,6 +143,10 @@ def build_exe() -> None:
         "opencc",
         "--collect-data",
         "opencc",
+        # FFmpeg is copied into vendor/tools above. Excluding the source package
+        # prevents PyInstaller from embedding the same 84 MB binary twice.
+        "--exclude-module",
+        "imageio_ffmpeg",
         "--add-data",
         str(ROOT / "vendor") + ";vendor",
         str(ROOT / "app.py"),

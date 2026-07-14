@@ -1,5 +1,9 @@
 # zipmkv
 
+公开源码：https://github.com/kdexrin-stack/zipmkv
+
+发布包：https://github.com/kdexrin-stack/zipmkv/releases
+
 `zipmkv` 是一个可扩展的桌面工具箱，面向压缩包、图片、PDF、弹幕和字幕处理。项目原则是：不破坏源文件，默认在源路径附近生成新文件夹保存结果，也可以手动选择输出目录。
 
 ## 功能
@@ -38,7 +42,7 @@ temp/
 项目已内置：
 
 - 7-Zip 命令行工具：用于 `.zip`、`.rar`、`.7z`、`.cbz`、`.cbr`、`.cb7`、`.epub`、`.tar`、`.gz` 等格式。
-- FFmpeg：通过 `imageio-ffmpeg` 打进 EXE，用于读取视频内封字幕。
+- FFmpeg：构建时通过 `imageio-ffmpeg` 准备，并以单份内置工具打进 EXE，用于读取、修改和封装视频内字幕。
 
 程序只使用项目/EXE 内置的 7-Zip，不再查找电脑上安装的 7-Zip、WinRAR 或 tar。
 
