@@ -17,7 +17,7 @@ class LogFrame(ttk.Frame):
         self.text.configure(
             bg=COLORS["console"],
             fg=COLORS["console_text"],
-            insertbackground="#ffffff",
+            insertbackground=COLORS["text"],
             selectbackground=COLORS["primary"],
             selectforeground="#ffffff",
             relief=tk.FLAT,

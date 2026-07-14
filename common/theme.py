@@ -8,27 +8,28 @@ from tkinter import ttk
 
 
 COLORS = {
-    "bg": "#edf1f5",
+    "bg": "#eaf7ff",
     "surface": "#ffffff",
-    "surface_muted": "#f6f8fb",
-    "surface_strong": "#e7ecf2",
-    "border": "#cfd7e2",
-    "text": "#18212f",
-    "muted": "#617083",
-    "primary": "#2f6fed",
-    "primary_hover": "#245dcc",
-    "primary_soft": "#e8efff",
-    "accent": "#ef6a4c",
-    "success": "#178c78",
-    "selection": "#dce7ff",
-    "hover": "#edf3ff",
-    "sidebar": "#111827",
-    "sidebar_surface": "#182232",
-    "sidebar_hover": "#222f43",
-    "sidebar_text": "#f6f8fb",
-    "sidebar_muted": "#98a6b8",
-    "console": "#111923",
-    "console_text": "#d9e4ee",
+    "surface_muted": "#f4fbff",
+    "surface_strong": "#dceff9",
+    "border": "#acd8ec",
+    "text": "#174a66",
+    "muted": "#5b7f93",
+    "primary": "#1598d4",
+    "primary_hover": "#0b7fb8",
+    "primary_soft": "#dff4ff",
+    "accent": "#ef5350",
+    "bell": "#ffd54a",
+    "success": "#2aa876",
+    "selection": "#d9f2ff",
+    "hover": "#e5f7ff",
+    "sidebar": "#1598d4",
+    "sidebar_surface": "#0f83bd",
+    "sidebar_hover": "#0b72a8",
+    "sidebar_text": "#ffffff",
+    "sidebar_muted": "#d7f3ff",
+    "console": "#eef9ff",
+    "console_text": "#1a5878",
 }
 
 FONT_FAMILY = "Microsoft YaHei"
@@ -191,8 +192,8 @@ def apply_app_theme(root: tk.Misc | None = None) -> ttk.Style:
     )
     style.map(
         "Nav.Treeview",
-        background=[("selected", COLORS["primary"]), ("!selected", COLORS["sidebar"])],
-        foreground=[("selected", "#ffffff"), ("!selected", COLORS["sidebar_text"])],
+        background=[("selected", COLORS["surface"]), ("!selected", COLORS["sidebar"])],
+        foreground=[("selected", COLORS["primary_hover"]), ("!selected", COLORS["sidebar_text"])],
     )
     style.configure("Feature.TNotebook", background=COLORS["surface"], borderwidth=0, tabmargins=(0, 0, 0, 0))
     style.configure("Feature.TNotebook.Tab", padding=(16, 10), font=(FONT_FAMILY, BASE_FONT_SIZE, "bold"), background=COLORS["surface_muted"], borderwidth=0)

@@ -15,7 +15,7 @@ from common.paths import ensure_runtime_dirs
 from common.theme import COLORS, FONT_FAMILY, apply_app_theme, enable_high_dpi_awareness
 from features import FEATURES, FeatureSpec
 
-APP_VERSION = "1.1"
+APP_VERSION = "1.1.1"
 
 
 class ZipMkvApp(tk.Tk):
@@ -86,8 +86,8 @@ class ZipMkvApp(tk.Tk):
         tk.Label(
             brand,
             text="Z",
-            bg=COLORS["primary"],
-            fg="#ffffff",
+            bg=COLORS["surface"],
+            fg=COLORS["primary_hover"],
             width=2,
             height=1,
             font=(FONT_FAMILY, 18, "bold"),
@@ -155,7 +155,7 @@ class ZipMkvApp(tk.Tk):
 
         status = ttk.Frame(content_shell, style="Status.TFrame", padding=(12, 7))
         status.pack(side=tk.BOTTOM, fill=tk.X, pady=(12, 0))
-        tk.Frame(status, width=8, height=8, bg=COLORS["success"]).pack(side=tk.LEFT, padx=(0, 8))
+        tk.Frame(status, width=8, height=8, bg=COLORS["bell"]).pack(side=tk.LEFT, padx=(0, 8))
         ttk.Label(status, textvariable=self.status_var, style="Status.TLabel").pack(side=tk.LEFT)
         ttk.Label(status, text="本地处理 · 源文件受保护", style="Status.TLabel").pack(side=tk.RIGHT)
 
