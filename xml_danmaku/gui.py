@@ -28,27 +28,48 @@ class FeatureFrame(ToolFrame):
         self.hour_var = tk.IntVar(value=0)
         self.minute_var = tk.IntVar(value=0)
         self.second_var = tk.IntVar(value=0)
+        self.output_format_var = tk.StringVar(value="ASS 滚动字幕")
+        self.scroll_dur_var = tk.DoubleVar(value=10.0)
+        self.font_size_var = tk.IntVar(value=34)
         self.text_conversion_var = tk.StringVar(value="不转换")
         self._build()
 
     def _build(self) -> None:
-        file_frame = ttk.LabelFrame(self, text="文件", padding=6)
-        file_frame.pack(fill=tk.BOTH, expand=False, pady=8)
+        file_frame = ttk.LabelFrame(self, text="输入 XML 弹幕", padding=(12, 8))
+        file_frame.pack(fill=tk.BOTH, expand=False, pady=(4, 6))
         file_buttons = ttk.Frame(file_frame)
-        file_buttons.pack(anchor=tk.W)
-        ttk.Button(file_buttons, text="选择单/多个 XML", command=self.choose_files).pack(side=tk.LEFT)
+        file_buttons.pack(anchor=tk.W, pady=(0, 4))
+        ttk.Button(file_buttons, text="选择 XML 文件", command=self.choose_files).pack(side=tk.LEFT)
         ttk.Button(file_buttons, text="选择文件夹扫描", command=self.choose_folder).pack(side=tk.LEFT, padx=6)
-        self.listbox = tk.Listbox(file_frame, height=6)
-        self.listbox.pack(fill=tk.BOTH, expand=True, pady=5)
+        self.listbox = tk.Listbox(file_frame, height=5, exportselection=False)
+        self.listbox.pack(fill=tk.BOTH, expand=True, pady=4)
         bind_listbox_delete_menu(self.listbox, self.delete_selected, self.clear_files)
 
-        option_frame = ttk.LabelFrame(self, text="处理选项", padding=8)
-        option_frame.pack(fill=tk.X, pady=6)
-        ttk.Checkbutton(option_frame, text="删除负数时间弹幕", variable=self.delete_var).pack(anchor=tk.W)
-        ttk.Checkbutton(option_frame, text="清理 ASS 样式标签并保留颜色", variable=self.strip_var).pack(anchor=tk.W)
-        ttk.Checkbutton(option_frame, text="启用时间平移", variable=self.adjust_var, command=self.toggle_adjust).pack(anchor=tk.W)
+        option_frame = ttk.LabelFrame(self, text="处理与转换设置", padding=(12, 8))
+        option_frame.pack(fill=tk.X, pady=(2, 6))
+        
+        fmt_row = ttk.Frame(option_frame)
+        fmt_row.pack(anchor=tk.W, pady=(0, 4))
+        ttk.Label(fmt_row, text="输出格式").pack(side=tk.LEFT)
+        ttk.Combobox(
+            fmt_row,
+            textvariable=self.output_format_var,
+            values=["ASS 滚动字幕", "XML (清洗/平移)", "SRT 字幕"],
+            width=18,
+            state="readonly",
+        ).pack(side=tk.LEFT, padx=6)
+        
+        ttk.Label(fmt_row, text="滚动时长(秒)").pack(side=tk.LEFT, padx=(12, 0))
+        ttk.Spinbox(fmt_row, from_=5, to=20, width=5, textvariable=self.scroll_dur_var).pack(side=tk.LEFT, padx=6)
+        ttk.Label(fmt_row, text="字号").pack(side=tk.LEFT, padx=(8, 0))
+        ttk.Spinbox(fmt_row, from_=18, to=72, width=5, textvariable=self.font_size_var).pack(side=tk.LEFT, padx=6)
+
+        ttk.Checkbutton(option_frame, text="删除时间戳为负数的无效弹幕", variable=self.delete_var).pack(anchor=tk.W, pady=2)
+        ttk.Checkbutton(option_frame, text="清理 ASS 样式标签并保留原颜色", variable=self.strip_var).pack(anchor=tk.W, pady=2)
+        ttk.Checkbutton(option_frame, text="启用弹幕时间平移", variable=self.adjust_var, command=self.toggle_adjust).pack(anchor=tk.W, pady=2)
+        
         conversion_row = ttk.Frame(option_frame)
-        conversion_row.pack(anchor=tk.W, pady=(6, 0))
+        conversion_row.pack(anchor=tk.W, pady=(4, 2))
         ttk.Label(conversion_row, text="文字繁简").pack(side=tk.LEFT)
         ttk.Combobox(
             conversion_row,
@@ -59,7 +80,7 @@ class FeatureFrame(ToolFrame):
         ).pack(side=tk.LEFT, padx=6)
 
         adjust = ttk.Frame(option_frame)
-        adjust.pack(anchor=tk.W, padx=20, pady=5)
+        adjust.pack(anchor=tk.W, padx=20, pady=4)
         ttk.Label(adjust, text="时").grid(row=0, column=0)
         self.hour_spin = ttk.Spinbox(adjust, from_=0, to=99, width=5, textvariable=self.hour_var, state=tk.DISABLED)
         self.hour_spin.grid(row=0, column=1, padx=3)
@@ -70,16 +91,17 @@ class FeatureFrame(ToolFrame):
         self.second_spin = ttk.Spinbox(adjust, from_=0, to=59, width=5, textvariable=self.second_var, state=tk.DISABLED)
         self.second_spin.grid(row=0, column=5, padx=3)
         self.ahead_radio = ttk.Radiobutton(adjust, text="提前", value="ahead", variable=self.direction_var, state=tk.DISABLED)
-        self.ahead_radio.grid(row=1, column=1, columnspan=2, sticky=tk.W)
+        self.ahead_radio.grid(row=1, column=1, columnspan=2, sticky=tk.W, pady=(4, 0))
         self.delay_radio = ttk.Radiobutton(adjust, text="延后", value="delay", variable=self.direction_var, state=tk.DISABLED)
-        self.delay_radio.grid(row=1, column=3, columnspan=2, sticky=tk.W)
+        self.delay_radio.grid(row=1, column=3, columnspan=2, sticky=tk.W, pady=(4, 0))
 
         row = ttk.Frame(self)
-        row.pack(fill=tk.X, pady=8)
+        row.pack(fill=tk.X, pady=(6, 8))
         start_button = ttk.Button(row, text="开始处理", style="Primary.TButton")
         start_button.config(command=lambda: self.start(start_button))
         start_button.pack(side=tk.LEFT)
-        ttk.Button(row, text="清空日志", command=self.log_frame.clear).pack(side=tk.LEFT, padx=8)
+        ttk.Button(row, text="清空列表", command=self.clear_files).pack(side=tk.LEFT, padx=8)
+        ttk.Button(row, text="清空日志", command=self.log_frame.clear).pack(side=tk.LEFT)
 
         self.log_frame.pack(fill=tk.BOTH, expand=True)
 
@@ -141,11 +163,22 @@ class FeatureFrame(ToolFrame):
         seconds = self.hour_var.get() * 3600 + self.minute_var.get() * 60 + self.second_var.get()
         if self.direction_var.get() == "ahead":
             seconds = -seconds
+        raw_fmt = self.output_format_var.get()
+        if "ASS" in raw_fmt:
+            out_fmt = "ass"
+        elif "SRT" in raw_fmt:
+            out_fmt = "srt"
+        else:
+            out_fmt = "xml"
+
         options = DanmakuOptions(
             delete_negative=self.delete_var.get(),
             adjust_enabled=self.adjust_var.get(),
             offset_seconds=seconds,
             strip_ass_tags=self.strip_var.get(),
+            output_format=out_fmt,
+            scroll_duration=max(3.0, float(self.scroll_dur_var.get())),
+            font_size=max(12, int(self.font_size_var.get())),
             text_conversion_mode=mode_key_from_label(self.text_conversion_var.get()),
         )
 

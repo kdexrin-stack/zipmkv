@@ -183,3 +183,55 @@ def probe_subtitle_streams(video_path: str | Path, ffprobe_path: str | Path | No
         raise RuntimeError(result.stderr.strip() or "读取字幕轨道失败")
     payload = json.loads(result.stdout or "{}")
     return payload.get("streams", [])
+
+
+def _probe_audio_with_ffmpeg(video_path: str | Path) -> list[dict]:
+    text = ffmpeg_probe_text(video_path)
+    streams: list[dict] = []
+    pattern = re.compile(
+        r"Stream #0:(?P<index>\d+)"
+        r"(?:\[[^\]]+\])?"
+        r"(?:\((?P<language>[^)]+)\))?"
+        r"[^:\r\n]*:\s*Audio:\s*(?P<codec>[^\r\n]+)",
+        re.IGNORECASE,
+    )
+    for match in pattern.finditer(text):
+        codec = match.group("codec").split(",", 1)[0].strip()
+        block = text[match.end(): match.end() + 900]
+        next_stream = block.find("Stream #")
+        if next_stream >= 0:
+            block = block[:next_stream]
+        title_match = re.search(r"^\s*title\s*:\s*(?P<title>.+)$", block, re.IGNORECASE | re.MULTILINE)
+        streams.append(
+            {
+                "index": int(match.group("index")),
+                "codec_name": codec,
+                "tags": {
+                    "language": match.group("language") or "",
+                    "title": title_match.group("title").strip() if title_match else "",
+                },
+            }
+        )
+    return streams
+
+
+def probe_audio_streams(video_path: str | Path, ffprobe_path: str | Path | None = None) -> list[dict]:
+    ffprobe = Path(ffprobe_path) if ffprobe_path else find_ffprobe()
+    if not ffprobe:
+        return _probe_audio_with_ffmpeg(video_path)
+    result = run_hidden([
+        str(ffprobe),
+        "-v",
+        "error",
+        "-select_streams",
+        "a",
+        "-show_entries",
+        "stream=index,codec_name:stream_tags=language,title",
+        "-of",
+        "json",
+        str(video_path),
+    ])
+    if result.returncode != 0:
+        return _probe_audio_with_ffmpeg(video_path)
+    payload = json.loads(result.stdout or "{}")
+    return payload.get("streams", [])

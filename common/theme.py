@@ -8,28 +8,40 @@ from tkinter import ttk
 
 
 COLORS = {
-    "bg": "#eaf7ff",
+    # Main background & surfaces
+    "bg": "#f1f5f9",
     "surface": "#ffffff",
-    "surface_muted": "#f4fbff",
-    "surface_strong": "#dceff9",
-    "border": "#acd8ec",
-    "text": "#174a66",
-    "muted": "#5b7f93",
-    "primary": "#1598d4",
-    "primary_hover": "#0b7fb8",
-    "primary_soft": "#dff4ff",
-    "accent": "#ef5350",
-    "bell": "#ffd54a",
-    "success": "#2aa876",
-    "selection": "#d9f2ff",
-    "hover": "#e5f7ff",
-    "sidebar": "#1598d4",
-    "sidebar_surface": "#0f83bd",
-    "sidebar_hover": "#0b72a8",
-    "sidebar_text": "#ffffff",
-    "sidebar_muted": "#d7f3ff",
-    "console": "#eef9ff",
-    "console_text": "#1a5878",
+    "surface_muted": "#f8fafc",
+    "surface_strong": "#e2e8f0",
+    "border": "#cbd5e1",
+    "border_light": "#e2e8f0",
+    # Text
+    "text": "#0f172a",
+    "muted": "#64748b",
+    "muted_light": "#94a3b8",
+    # Primary & Accents
+    "primary": "#2563eb",
+    "primary_hover": "#1d4ed8",
+    "primary_active": "#1e40af",
+    "primary_soft": "#eff6ff",
+    "primary_soft_border": "#bfdbfe",
+    "accent": "#ef4444",
+    "bell": "#f59e0b",
+    "success": "#10b981",
+    "selection": "#dbeafe",
+    "hover": "#f1f5f9",
+    # Sidebar (Dark Slate)
+    "sidebar": "#0f172a",
+    "sidebar_surface": "#1e293b",
+    "sidebar_hover": "#334155",
+    "sidebar_active": "#2563eb",
+    "sidebar_text": "#f8fafc",
+    "sidebar_muted": "#94a3b8",
+    "sidebar_border": "#1e293b",
+    # Console / Log
+    "console": "#f8fafc",
+    "console_text": "#0f172a",
+    "console_border": "#e2e8f0",
 }
 
 FONT_FAMILY = "Microsoft YaHei"
@@ -84,7 +96,7 @@ def apply_named_fonts() -> None:
 
 def _configure_checkbox_indicator(root: tk.Misc, style: ttk.Style) -> None:
     size = 18
-    image_width = 23
+    image_width = 24
 
     def square(fill: str, border: str) -> tk.PhotoImage:
         image = tk.PhotoImage(master=root, width=image_width, height=size)
@@ -172,12 +184,60 @@ def apply_app_theme(root: tk.Misc | None = None) -> ttk.Style:
     )
     style.configure("AppTitle.TLabel", background=COLORS["sidebar"], foreground=COLORS["sidebar_text"], font=(FONT_FAMILY, 18, "bold"))
     style.configure("PageTitle.TLabel", background=COLORS["surface"], foreground=COLORS["text"], font=(FONT_FAMILY, 17, "bold"))
-    style.configure("TButton", padding=(13, 8), borderwidth=1, relief=tk.FLAT, background=COLORS["surface"], bordercolor=COLORS["border"], focuscolor=COLORS["primary_soft"])
-    style.configure("Primary.TButton", padding=(16, 9), background=COLORS["primary"], foreground="#ffffff", borderwidth=0, relief=tk.FLAT, focuscolor=COLORS["primary"])
-    style.configure("Sidebar.TButton", padding=(12, 8), background=COLORS["sidebar_surface"], foreground=COLORS["sidebar_text"], borderwidth=0, relief=tk.FLAT, focuscolor=COLORS["sidebar_surface"])
-    style.configure("TEntry", padding=(8, 6), fieldbackground=COLORS["surface"], bordercolor=COLORS["border"], lightcolor=COLORS["border"], darkcolor=COLORS["border"], insertcolor=COLORS["text"])
-    style.configure("TCombobox", padding=(8, 6), fieldbackground=COLORS["surface"], background=COLORS["surface"], bordercolor=COLORS["border"], lightcolor=COLORS["border"], darkcolor=COLORS["border"], arrowcolor=COLORS["muted"])
-    style.configure("TSpinbox", padding=(8, 6), fieldbackground=COLORS["surface"], bordercolor=COLORS["border"], arrowcolor=COLORS["muted"])
+    style.configure(
+        "TButton",
+        padding=(13, 7),
+        borderwidth=1,
+        relief=tk.FLAT,
+        background=COLORS["surface"],
+        bordercolor=COLORS["border"],
+        focuscolor=COLORS["primary_soft"],
+    )
+    style.configure(
+        "Primary.TButton",
+        padding=(16, 8),
+        background=COLORS["primary"],
+        foreground="#ffffff",
+        borderwidth=0,
+        relief=tk.FLAT,
+        font=(FONT_FAMILY, BASE_FONT_SIZE, "bold"),
+        focuscolor=COLORS["primary"],
+    )
+    style.configure(
+        "Sidebar.TButton",
+        padding=(12, 7),
+        background=COLORS["sidebar_surface"],
+        foreground=COLORS["sidebar_text"],
+        borderwidth=0,
+        relief=tk.FLAT,
+        focuscolor=COLORS["sidebar_surface"],
+    )
+    style.configure(
+        "TEntry",
+        padding=(8, 6),
+        fieldbackground=COLORS["surface"],
+        bordercolor=COLORS["border"],
+        lightcolor=COLORS["border"],
+        darkcolor=COLORS["border"],
+        insertcolor=COLORS["text"],
+    )
+    style.configure(
+        "TCombobox",
+        padding=(8, 6),
+        fieldbackground=COLORS["surface"],
+        background=COLORS["surface"],
+        bordercolor=COLORS["border"],
+        lightcolor=COLORS["border"],
+        darkcolor=COLORS["border"],
+        arrowcolor=COLORS["muted"],
+    )
+    style.configure(
+        "TSpinbox",
+        padding=(8, 6),
+        fieldbackground=COLORS["surface"],
+        bordercolor=COLORS["border"],
+        arrowcolor=COLORS["muted"],
+    )
     style.configure("TCheckbutton", background=COLORS["surface"], foreground=COLORS["text"], padding=(2, 3), focuscolor=COLORS["surface"])
     style.configure("TRadiobutton", background=COLORS["surface"], foreground=COLORS["text"], padding=(2, 3), focuscolor=COLORS["surface"])
     style.configure(
@@ -187,39 +247,39 @@ def apply_app_theme(root: tk.Misc | None = None) -> ttk.Style:
         foreground=COLORS["sidebar_text"],
         borderwidth=0,
         relief=tk.FLAT,
-        rowheight=38,
+        rowheight=36,
         font=(FONT_FAMILY, BASE_FONT_SIZE),
     )
     style.map(
         "Nav.Treeview",
-        background=[("selected", COLORS["surface"]), ("!selected", COLORS["sidebar"])],
-        foreground=[("selected", COLORS["primary_hover"]), ("!selected", COLORS["sidebar_text"])],
+        background=[("selected", COLORS["sidebar_hover"]), ("!selected", COLORS["sidebar"])],
+        foreground=[("selected", "#ffffff"), ("!selected", COLORS["sidebar_muted"])],
     )
     style.configure("Feature.TNotebook", background=COLORS["surface"], borderwidth=0, tabmargins=(0, 0, 0, 0))
-    style.configure("Feature.TNotebook.Tab", padding=(16, 10), font=(FONT_FAMILY, BASE_FONT_SIZE, "bold"), background=COLORS["surface_muted"], borderwidth=0)
+    style.configure("Feature.TNotebook.Tab", padding=(16, 9), font=(FONT_FAMILY, BASE_FONT_SIZE, "bold"), background=COLORS["surface_muted"], borderwidth=0)
     style.map(
         "Feature.TNotebook.Tab",
         background=[("selected", COLORS["surface"]), ("active", COLORS["hover"])],
         foreground=[("selected", COLORS["primary"])],
     )
-    style.configure("TLabelframe", background=COLORS["surface"], bordercolor=COLORS["border"], lightcolor=COLORS["border"], darkcolor=COLORS["border"], borderwidth=1, relief=tk.SOLID)
+    style.configure("TLabelframe", background=COLORS["surface"], bordercolor=COLORS["border_light"], lightcolor=COLORS["border_light"], darkcolor=COLORS["border_light"], borderwidth=1, relief=tk.SOLID)
     style.configure("TLabelframe.Label", background=COLORS["surface"], foreground=COLORS["text"], font=(FONT_FAMILY, BASE_FONT_SIZE, "bold"))
     style.configure("Vertical.TScrollbar", background=COLORS["surface_strong"], troughcolor=COLORS["surface_muted"], borderwidth=0, arrowcolor=COLORS["muted"])
     style.configure("Horizontal.TScrollbar", background=COLORS["surface_strong"], troughcolor=COLORS["surface_muted"], borderwidth=0, arrowcolor=COLORS["muted"])
     style.map(
         "TButton",
-        background=[("active", COLORS["hover"]), ("pressed", COLORS["primary_soft"]), ("disabled", COLORS["surface_strong"])],
+        background=[("pressed", COLORS["surface_strong"]), ("active", COLORS["hover"]), ("disabled", COLORS["surface_muted"])],
         bordercolor=[("focus", COLORS["primary"]), ("active", COLORS["primary"])],
-        foreground=[("disabled", COLORS["muted"])],
+        foreground=[("disabled", COLORS["muted_light"])],
     )
     style.map(
         "Primary.TButton",
-        background=[("active", COLORS["primary_hover"]), ("disabled", COLORS["border"])],
+        background=[("pressed", COLORS["primary_active"]), ("active", COLORS["primary_hover"]), ("disabled", COLORS["border"])],
         foreground=[("active", "#ffffff"), ("disabled", COLORS["muted"])],
     )
     style.map(
         "Sidebar.TButton",
-        background=[("active", COLORS["sidebar_hover"]), ("pressed", COLORS["primary"])],
+        background=[("pressed", COLORS["sidebar_active"]), ("active", COLORS["sidebar_hover"])],
         foreground=[("active", "#ffffff")],
     )
     style.map(
@@ -239,12 +299,12 @@ def configure_listbox(listbox: tk.Listbox) -> None:
         bg=COLORS["surface_muted"],
         fg=COLORS["text"],
         selectbackground=COLORS["selection"],
-        selectforeground=COLORS["text"],
+        selectforeground=COLORS["primary_hover"],
         activestyle="none",
         relief=tk.FLAT,
         bd=0,
         highlightthickness=1,
-        highlightbackground=COLORS["border"],
+        highlightbackground=COLORS["border_light"],
         highlightcolor=COLORS["primary"],
         font=(FONT_FAMILY, BASE_FONT_SIZE),
         selectborderwidth=0,

@@ -13,25 +13,25 @@ from .theme import BASE_FONT_SIZE, COLORS, FONT_FAMILY, configure_listbox
 class LogFrame(ttk.Frame):
     def __init__(self, master):
         super().__init__(master, style="Surface.TFrame")
-        self.text = scrolledtext.ScrolledText(self, height=12, wrap=tk.WORD)
+        self.text = scrolledtext.ScrolledText(self, height=11, wrap=tk.WORD)
         self.text.configure(
             bg=COLORS["console"],
             fg=COLORS["console_text"],
             insertbackground=COLORS["text"],
-            selectbackground=COLORS["primary"],
-            selectforeground="#ffffff",
+            selectbackground=COLORS["selection"],
+            selectforeground=COLORS["primary_hover"],
             relief=tk.FLAT,
             bd=0,
             highlightthickness=1,
-            highlightbackground=COLORS["border"],
+            highlightbackground=COLORS["console_border"],
             highlightcolor=COLORS["primary"],
             font=(FONT_FAMILY, BASE_FONT_SIZE),
-            padx=10,
-            pady=8,
+            padx=12,
+            pady=10,
         )
         self.text.pack(fill=tk.BOTH, expand=True)
         self._pending: queue.Queue[str] = queue.Queue()
-        self._drain_after_id: str | None = self.after(40, self._drain_pending)
+        self._drain_after_id: str | None = self.after(30, self._drain_pending)
         self.bind("<Destroy>", self._cancel_drain, add="+")
 
     def _cancel_drain(self, event=None) -> None:
@@ -50,13 +50,17 @@ class LogFrame(ttk.Frame):
 
     def _drain_pending(self) -> None:
         self._drain_after_id = None
+        lines = []
         try:
-            while True:
-                self._append(self._pending.get_nowait())
+            while len(lines) < 50:
+                lines.append(self._pending.get_nowait())
         except queue.Empty:
             pass
+        if lines:
+            self.text.insert(tk.END, "\n".join(lines) + "\n")
+            self.text.see(tk.END)
         try:
-            self._drain_after_id = self.after(40, self._drain_pending)
+            self._drain_after_id = self.after(30, self._drain_pending)
         except tk.TclError:
             pass
 
@@ -112,6 +116,12 @@ def bind_listbox_delete_menu(
         font=(FONT_FAMILY, BASE_FONT_SIZE),
     )
     menu.add_command(label=delete_label, command=delete_selected)
+    
+    def select_all_items(_event=None) -> str:
+        listbox.selection_set(0, tk.END)
+        return "break"
+
+    menu.add_command(label="全选", command=lambda: select_all_items())
     if clear_all:
         menu.add_separator()
         menu.add_command(label="清空列表", command=clear_all)
@@ -133,6 +143,8 @@ def bind_listbox_delete_menu(
     listbox.bind("<Button-3>", show_menu)
     listbox.bind("<Delete>", delete_event)
     listbox.bind("<BackSpace>", delete_event)
+    listbox.bind("<Control-a>", select_all_items)
+    listbox.bind("<Control-A>", select_all_items)
 
 
 class ToolFrame(ttk.Frame):
@@ -143,7 +155,7 @@ class ToolFrame(ttk.Frame):
         super().__init__(master, padding=18, style="Workspace.TFrame")
         self.log_frame = LogFrame(self)
         self._ui_pending: queue.Queue[object] = queue.Queue()
-        self._ui_after_id: str | None = self.after(40, self._drain_ui_pending)
+        self._ui_after_id: str | None = self.after(30, self._drain_ui_pending)
         self.bind("<Destroy>", self._cancel_ui_drain, add="+")
 
     def _cancel_ui_drain(self, event=None) -> None:
@@ -167,7 +179,7 @@ class ToolFrame(ttk.Frame):
         except tk.TclError:
             return
         try:
-            self._ui_after_id = self.after(40, self._drain_ui_pending)
+            self._ui_after_id = self.after(30, self._drain_ui_pending)
         except tk.TclError:
             pass
 
@@ -176,16 +188,21 @@ class ToolFrame(ttk.Frame):
 
     def run_background(self, button: tk.Widget, job, done_message: str = "处理完成") -> None:
         button.config(state=tk.DISABLED)
-        self._set_app_status("正在处理，请稍候")
+        self._set_app_status("正在处理，请稍候...")
+        import time
 
         def worker():
+            start_time = time.time()
             try:
                 stream = _LogStream(self.log_frame.write)
                 with contextlib.redirect_stdout(stream), contextlib.redirect_stderr(stream):
-                    message = job() or done_message
+                    raw_msg = job()
+                    message = raw_msg or done_message
                 stream.flush()
-                self.call_in_ui(lambda: self._set_app_status(message))
-                self.call_in_ui(lambda: messagebox.showinfo("完成", message))
+                elapsed = time.time() - start_time
+                status_msg = f"{message}（耗时 {elapsed:.1f}s）"
+                self.call_in_ui(lambda: self._set_app_status(status_msg))
+                self.call_in_ui(lambda: messagebox.showinfo("完成", status_msg))
             except Exception as exc:
                 error_message = str(exc)
                 self.log_frame.write(f"任务失败: {error_message}")

@@ -8,7 +8,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from common.log import Logger, emit
-from common.media_tools import find_ffmpeg, find_ffprobe, probe_subtitle_streams, run_hidden
+from common.media_tools import find_ffmpeg, find_ffprobe, probe_audio_streams, probe_subtitle_streams, run_hidden
 from common.text_utils import safe_stem, unique_path
 from common.zhconv import convert_chinese_text
 
@@ -904,6 +904,88 @@ def remove_subtitle_tracks_from_videos(
             )
         )
         emit(log, f"已输出删除字幕视频: {outputs[-1]}")
+    return outputs
+
+
+def extract_audio_from_video(
+    video_path: str | Path,
+    output_path: str | Path,
+    audio_stream: int = 0,
+    audio_format: str = "mp3",
+    log: Logger | None = None,
+) -> Path:
+    ffmpeg = find_ffmpeg()
+    if not ffmpeg:
+        raise RuntimeError("未找到 ffmpeg，无法提取音频。")
+    video = Path(video_path)
+    audio_streams = probe_audio_streams(video)
+    if not audio_streams:
+        raise RuntimeError(f"视频没有检测到音频轨道: {video.name}")
+    if audio_stream < 0 or audio_stream >= len(audio_streams):
+        raise RuntimeError(f"音频轨道序号超出范围（可用轨道数: {len(audio_streams)}）")
+        
+    output = Path(output_path)
+    output.parent.mkdir(parents=True, exist_ok=True)
+    
+    command = [
+        str(ffmpeg),
+        "-y",
+        "-i",
+        str(video),
+        "-vn",
+        "-map",
+        f"0:a:{audio_stream}",
+    ]
+    fmt = audio_format.lower().strip().lstrip(".")
+    if fmt in ("copy", "auto", "same"):
+        command.extend(["-c:a", "copy"])
+    elif fmt == "mp3":
+        command.extend(["-c:a", "libmp3lame", "-q:a", "2"])
+    elif fmt == "aac":
+        command.extend(["-c:a", "aac", "-b:a", "256k"])
+    elif fmt == "flac":
+        command.extend(["-c:a", "flac"])
+    elif fmt == "wav":
+        command.extend(["-c:a", "pcm_s16le"])
+    else:
+        command.extend(["-c:a", "copy"])
+        
+    command.append(str(output))
+    emit(log, f"提取音频: {video.name} -> {output.name}")
+    result = run_hidden(command)
+    if result.returncode != 0:
+        raise RuntimeError(result.stderr.strip() or "提取音频失败")
+    return output
+
+
+def extract_audio_from_videos(
+    video_paths: list[str | Path],
+    output_dir: str | Path | None = None,
+    audio_stream: int = 0,
+    audio_format: str = "mp3",
+    log: Logger | None = None,
+) -> list[Path]:
+    videos = [Path(path) for path in video_paths if is_video(path) and Path(path).is_file()]
+    if not videos:
+        raise RuntimeError("请先选择要提取音频的视频。")
+    out_root = Path(output_dir) if output_dir else videos[0].parent / "提取音频输出"
+    out_root.mkdir(parents=True, exist_ok=True)
+    outputs: list[Path] = []
+    
+    fmt = audio_format.lower().strip().lstrip(".")
+    ext = f".{fmt}" if fmt in ("mp3", "aac", "flac", "wav", "m4a") else ".m4a"
+    for video in videos:
+        output = unique_path(out_root / f"{safe_stem(video.stem)}_audio{ext}")
+        outputs.append(
+            extract_audio_from_video(
+                video,
+                output,
+                audio_stream=audio_stream,
+                audio_format=audio_format,
+                log=log,
+            )
+        )
+        emit(log, f"已输出音频文件: {outputs[-1]}")
     return outputs
 
 

@@ -42,43 +42,43 @@ class FeatureFrame(ToolFrame):
         self.refresh_preview()
 
     def _build(self) -> None:
-        mode_frame = ttk.LabelFrame(self, text="命名方式", padding=8)
-        mode_frame.pack(fill=tk.X, pady=(8, 6))
+        mode_frame = ttk.LabelFrame(self, text="命名模式", padding=(12, 8))
+        mode_frame.pack(fill=tk.X, pady=(4, 6))
         ttk.Radiobutton(
             mode_frame,
-            text="参考 A 组文件名",
+            text="参考 A 组文件名（一对一配对）",
             value="reference",
             variable=self.mode_var,
             command=self.update_mode_state,
         ).pack(side=tk.LEFT)
         ttk.Radiobutton(
             mode_frame,
-            text="手动规则生成",
+            text="按规则自动生成（前缀/编号/后缀/模板）",
             value="manual",
             variable=self.mode_var,
             command=self.update_mode_state,
-        ).pack(side=tk.LEFT, padx=(18, 0))
+        ).pack(side=tk.LEFT, padx=(24, 0))
 
         panes = ttk.Frame(self)
-        panes.pack(fill=tk.BOTH, expand=True, pady=6)
+        panes.pack(fill=tk.BOTH, expand=True, pady=(2, 6))
 
         self.a_list = self._build_file_panel(
             panes,
-            "A 组：参考新名字",
+            "A 组：参考名称源",
             self.choose_a,
             self.choose_a_folder,
         )
         bind_listbox_delete_menu(self.a_list, self.delete_selected_a, self.clear_a)
         self.b_list = self._build_file_panel(
             panes,
-            "B 组：将生成重命名副本",
+            "B 组：待处理目标文件",
             self.choose_b,
             self.choose_b_folder,
         )
         bind_listbox_delete_menu(self.b_list, self.delete_selected_b, self.clear_b)
 
-        rule_frame = ttk.LabelFrame(self, text="手动规则", padding=8)
-        rule_frame.pack(fill=tk.X, pady=6)
+        rule_frame = ttk.LabelFrame(self, text="编号与命名规则设置", padding=(12, 8))
+        rule_frame.pack(fill=tk.X, pady=(2, 6))
         rule_frame.columnconfigure(7, weight=1)
         self._add_rule_label(rule_frame, "固定前缀", 0, 0)
         prefix_entry = ttk.Entry(rule_frame, textvariable=self.prefix_var, width=14)
@@ -102,12 +102,12 @@ class FeatureFrame(ToolFrame):
         suffix_entry.grid(row=0, column=5, sticky=tk.W, padx=(4, 12))
         self.manual_widgets.append(suffix_entry)
 
-        self._add_rule_label(rule_frame, "起始", 1, 0)
+        self._add_rule_label(rule_frame, "起始序号", 1, 0)
         start_spin = ttk.Spinbox(rule_frame, from_=0, to=9999, width=6, textvariable=self.start_var)
         start_spin.grid(row=1, column=1, sticky=tk.W, padx=(4, 12), pady=(6, 0))
         self.manual_widgets.append(start_spin)
 
-        self._add_rule_label(rule_frame, "步进", 1, 2)
+        self._add_rule_label(rule_frame, "递增步进", 1, 2)
         step_spin = ttk.Spinbox(rule_frame, from_=1, to=999, width=6, textvariable=self.step_var)
         step_spin.grid(row=1, column=3, sticky=tk.W, padx=(4, 12), pady=(6, 0))
         self.manual_widgets.append(step_spin)
@@ -118,10 +118,10 @@ class FeatureFrame(ToolFrame):
         self.manual_widgets.append(custom_entry)
         ttk.Label(
             rule_frame,
-            text="模板支持 {num}、{num:02d}、{num:03d}；也可直接写 视频ep{num:02d}视频。",
+            text="提示：模板支持 {num}、{num:02d}、{num:03d}；例如：视频ep{num:02d}最终版",
             style="Muted.TLabel",
         ).grid(row=2, column=0, columnspan=8, sticky=tk.W, pady=(6, 0))
-        ttk.Label(rule_frame, textvariable=self.example_var, style="Muted.TLabel").grid(
+        ttk.Label(rule_frame, textvariable=self.example_var, style="Eyebrow.TLabel").grid(
             row=3,
             column=0,
             columnspan=8,
@@ -129,25 +129,25 @@ class FeatureFrame(ToolFrame):
             pady=(4, 0),
         )
 
-        preview_frame = ttk.LabelFrame(self, text="重命名预览", padding=6)
-        preview_frame.pack(fill=tk.BOTH, expand=True, pady=6)
-        self.preview = tk.Listbox(preview_frame, height=8, exportselection=False)
+        preview_frame = ttk.LabelFrame(self, text="重命名效果预览", padding=8)
+        preview_frame.pack(fill=tk.BOTH, expand=True, pady=(2, 6))
+        self.preview = tk.Listbox(preview_frame, height=6, exportselection=False)
         configure_listbox(self.preview)
         self.preview.pack(fill=tk.BOTH, expand=True)
 
         output_row = ttk.Frame(self)
-        output_row.pack(fill=tk.X, pady=4)
+        output_row.pack(fill=tk.X, pady=(2, 4))
         ttk.Label(output_row, text="输出目录").pack(side=tk.LEFT)
-        ttk.Entry(output_row, textvariable=self.output_var).pack(side=tk.LEFT, fill=tk.X, expand=True, padx=5)
+        ttk.Entry(output_row, textvariable=self.output_var).pack(side=tk.LEFT, fill=tk.X, expand=True, padx=6)
         ttk.Button(output_row, text="选择", command=self.choose_output).pack(side=tk.LEFT)
 
         row = ttk.Frame(self)
-        row.pack(fill=tk.X, pady=8)
+        row.pack(fill=tk.X, pady=(6, 8))
         start_button = ttk.Button(row, text="生成重命名副本", style="Primary.TButton")
         start_button.config(command=lambda: self.start(start_button))
         start_button.pack(side=tk.LEFT)
         ttk.Button(row, text="刷新预览", command=self.refresh_preview).pack(side=tk.LEFT, padx=8)
-        ttk.Button(row, text="清空", command=self.clear_all).pack(side=tk.LEFT)
+        ttk.Button(row, text="清空列表", command=self.clear_all).pack(side=tk.LEFT)
 
         self.log_frame.pack(fill=tk.BOTH, expand=True)
 

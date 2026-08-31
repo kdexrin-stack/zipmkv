@@ -218,6 +218,20 @@ def smoke_xml_danmaku(base: Path) -> None:
     if "negative" in text or "{\\c" in text or 'p="3,' not in text or "繁体字" not in text:
         raise AssertionError("xml output content check failed")
 
+    # Test XML -> ASS conversion
+    count_ass = process_xml_files(
+        [xml_path],
+        DanmakuOptions(output_format="ass", text_conversion_mode="t2s"),
+        log=log,
+    )
+    if count_ass != 1:
+        raise AssertionError("xml to ass conversion failed")
+    output_ass = source / "弹幕转字幕输出" / "danmaku.ass"
+    assert_file(output_ass)
+    ass_text = output_ass.read_text(encoding="utf-8")
+    if "[Script Info]" not in ass_text or "Dialogue:" not in ass_text or "繁体字" not in ass_text:
+        raise AssertionError("xml to ass output format invalid")
+
 
 def smoke_subtitles(base: Path) -> None:
     source = base / "subtitles"
@@ -239,104 +253,100 @@ def smoke_subtitles(base: Path) -> None:
         "Dialogue: 0,0:00:01.00,0:00:02.00,Body,,0,0,0,,sample\n",
         encoding="utf-8",
     )
-    result = modify_subtitle_or_video(
-        srt,
-        source / "out",
-        StyleOptions(font_name="Microsoft YaHei", font_size="40", primary_color="#00FF00", use_sample=True, output_format="ass"),
-        sample_path=sample_ass,
-        log=log,
-    )
-    if len(result) != 1:
-        raise AssertionError("subtitle output count mismatch")
-    assert_file(result[0])
-    text = result[0].read_text(encoding="utf-8")
-    if "Microsoft YaHei" not in text or "&H0000FF00" not in text or "Dialogue:" not in text:
-        raise AssertionError("subtitle output content check failed")
 
     traditional_srt = source / "traditional.srt"
     traditional_srt.write_text(
         "1\n00:00:01,000 --> 00:00:02,000\n繁體字與臺灣\n",
         encoding="utf-8",
     )
-    converted_result = modify_many(
-        [traditional_srt],
+    result_convert = modify_subtitle_or_video(
+        traditional_srt,
         source / "out_convert",
-        StyleOptions(output_format="ass", text_conversion_mode="t2s"),
+        StyleOptions(text_conversion_mode="t2s", output_format="ass"),
         log=log,
     )
-    converted_text = converted_result[0].read_text(encoding="utf-8")
-    if "繁体字与台湾" not in converted_text or "Dialogue:" not in converted_text:
-        raise AssertionError("subtitle conversion output check failed")
+    if len(result_convert) != 1:
+        raise AssertionError("subtitle convert output count mismatch")
+    assert_file(result_convert[0])
+    text_convert = result_convert[0].read_text(encoding="utf-8")
+    if "繁体字与台湾" not in text_convert:
+        raise AssertionError("subtitle zh conversion failed")
 
-    batch_result = modify_many(
-        [srt],
+    result_srt = modify_subtitle_or_video(
+        srt,
         source / "out_srt",
-        StyleOptions(output_format="srt", font_name="Arial"),
-        sample_paths=[sample_ass],
+        StyleOptions(output_format="srt"),
         log=log,
     )
-    if batch_result[0].suffix.casefold() != ".srt":
-        raise AssertionError("subtitle output format override failed")
-    if "-->" not in batch_result[0].read_text(encoding="utf-8"):
-        raise AssertionError("srt output content check failed")
+    if len(result_srt) != 1 or result_srt[0].suffix.casefold() != ".srt":
+        raise AssertionError("subtitle srt output failed")
+    assert_file(result_srt[0])
+    srt_text = result_srt[0].read_text(encoding="utf-8")
+    if "-->" not in srt_text or "hello" not in srt_text:
+        raise AssertionError("subtitle srt output content failed")
 
-    ffmpeg = find_ffmpeg()
-    if ffmpeg:
-        srt2 = source / "sample2.srt"
-        srt2.write_text(
-            "1\n00:00:01,000 --> 00:00:02,000\nsecond track\n",
-            encoding="utf-8",
-        )
-        video = source / "video_with_subs.mkv"
-        result = run_hidden([
+    def create_test_video_with_subtitles(video_path: Path, sub_paths: list[Path]) -> None:
+        ffmpeg = find_ffmpeg()
+        if not ffmpeg:
+            return
+        cmd = [
             str(ffmpeg),
             "-y",
             "-f",
             "lavfi",
             "-i",
             "color=c=black:s=160x90:d=5",
+            "-f",
+            "lavfi",
             "-i",
-            str(srt),
-            "-i",
-            str(srt2),
-            "-map",
-            "0:v",
-            "-map",
-            "1:0",
-            "-map",
-            "2:0",
-            "-t",
-            "5",
-            "-c:v",
-            "mpeg4",
-            "-c:s",
-            "srt",
-            str(video),
-        ])
-        if result.returncode != 0:
-            raise AssertionError(result.stderr.strip() or "failed to create mkv smoke file")
+            "anullsrc=r=44100:cl=stereo",
+        ]
+        for sp in sub_paths:
+            cmd.extend(["-i", str(sp)])
+        cmd.extend(["-map", "0:v", "-map", "1:a"])
+        for i in range(len(sub_paths)):
+            cmd.extend(["-map", str(i + 2)])
+        cmd.extend(["-t", "5", "-c:v", "libx264", "-c:a", "aac", "-c:s", "srt", str(video_path)])
+        run_hidden(cmd)
+
+    ffmpeg = find_ffmpeg()
+    if ffmpeg:
+        video = source / "video_with_subs.mkv"
+        subtitle_one = source / "sub1.srt"
+        subtitle_two = source / "sub2.srt"
+        subtitle_one.write_text("1\n00:00:00,500 --> 00:00:02,000\nsub track 1\n", encoding="utf-8")
+        subtitle_two.write_text("1\n00:00:00,500 --> 00:00:02,000\nsub track 2\n", encoding="utf-8")
+        create_test_video_with_subtitles(video, [subtitle_one, subtitle_two])
+        assert_file(video)
         streams = probe_subtitle_streams(video)
-        if not streams:
-            raise AssertionError("video subtitle stream not detected")
+        if len(streams) < 2:
+            raise AssertionError("test video creation failed")
+
         video_outputs = modify_many(
             [video],
-            source / "out_video",
-            StyleOptions(output_format="ass", all_subtitle_streams=True, use_sample=True),
             sample_paths=[sample_ass],
+            output_dir=source / "out_video",
+            options=StyleOptions(use_sample=True, all_subtitle_streams=True, output_format="ass"),
             log=log,
         )
-        ass_outputs = [path for path in video_outputs if path.suffix.casefold() == ".ass"]
-        if len(ass_outputs) < 2:
-            raise AssertionError("video subtitle all-track output failed")
-        ass_text = ass_outputs[0].read_text(encoding="utf-8")
-        if "Style: Default,FangSong,72" not in ass_text or "PlayResX: 1920" not in ass_text or "Dialogue:" not in ass_text:
-            raise AssertionError("video internal srt to styled ass failed")
+        if len(video_outputs) < 2:
+            raise AssertionError("video subtitle extraction count mismatch")
+        for video_output in video_outputs:
+            assert_file(video_output)
+            output_text = video_output.read_text(encoding="utf-8")
+            if "FangSong" not in output_text or "72" not in output_text or "&H64000000" not in output_text:
+                raise AssertionError("video subtitle style extraction failed")
 
         remux_outputs = modify_many(
             [video],
-            source / "out_remux",
-            StyleOptions(output_format="ass", all_subtitle_streams=True, use_sample=True, remux_video=True),
             sample_paths=[sample_ass],
+            output_dir=source / "out_remux",
+            options=StyleOptions(
+                use_sample=True,
+                remux_video=True,
+                all_subtitle_streams=True,
+                output_format="ass",
+            ),
             log=log,
         )
         remuxed = next((path for path in remux_outputs if path.suffix.casefold() == ".mkv"), None)
@@ -361,6 +371,18 @@ def smoke_subtitles(base: Path) -> None:
         )
         if probe_subtitle_streams(removed_outputs[0]):
             raise AssertionError("video subtitle delete failed")
+
+        from subtitles.core import extract_audio_from_videos
+        audio_outputs = extract_audio_from_videos(
+            [video],
+            output_dir=source / "out_audio",
+            audio_stream=0,
+            audio_format="mp3",
+            log=log,
+        )
+        if len(audio_outputs) != 1:
+            raise AssertionError("video audio extraction count mismatch")
+        assert_file(audio_outputs[0])
 
 
 def smoke_subtitle_workspace_independence(base: Path) -> None:

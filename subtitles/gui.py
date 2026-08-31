@@ -23,6 +23,7 @@ from .core import (
     modify_many,
     mux_subtitles_into_videos,
     remove_subtitle_tracks_from_videos,
+    extract_audio_from_videos,
 )
 
 
@@ -30,6 +31,7 @@ TARGET_EXTENSIONS = SUBTITLE_EXTENSIONS | VIDEO_EXTENSIONS
 VIDEO_ACTION_MODIFY = "修改字幕后封装"
 VIDEO_ACTION_ADD = "直接添加字幕"
 VIDEO_ACTION_REMOVE = "删除视频字幕轨"
+VIDEO_ACTION_EXTRACT_AUDIO = "无损提取音频轨"
 
 
 class FeatureFrame(ToolFrame):
@@ -237,9 +239,17 @@ class FeatureFrame(ToolFrame):
             entry_widget.pack(side=tk.LEFT, fill=tk.X, expand=True)
             self.manual_widgets.extend([label_widget, entry_widget])
             if is_color:
-                swatch = tk.Label(control, width=3, relief=tk.SUNKEN, bg="#FFFFFF")
+                swatch = tk.Label(
+                    control,
+                    width=3,
+                    relief=tk.FLAT,
+                    bd=0,
+                    highlightthickness=1,
+                    highlightbackground=COLORS["border"],
+                    bg="#FFFFFF",
+                )
                 swatch.pack(side=tk.LEFT, padx=(5, 3))
-                button = ttk.Button(control, text="选择", width=5, command=lambda v=var: self.choose_color(v))
+                button = ttk.Button(control, text="拾取", width=5, command=lambda v=var: self.choose_color(v))
                 button.pack(side=tk.LEFT)
                 var.trace_add("write", lambda *_args, v=var: self.refresh_color_swatches(v))
                 self.color_swatches.append((var, swatch))
@@ -265,7 +275,7 @@ class FeatureFrame(ToolFrame):
         ttk.Combobox(
             operation_frame,
             textvariable=self.video_action_var,
-            values=[VIDEO_ACTION_MODIFY, VIDEO_ACTION_ADD, VIDEO_ACTION_REMOVE],
+            values=[VIDEO_ACTION_MODIFY, VIDEO_ACTION_ADD, VIDEO_ACTION_REMOVE, VIDEO_ACTION_EXTRACT_AUDIO],
             state="readonly",
             width=20,
         ).grid(row=0, column=1, sticky=tk.W, padx=6)
@@ -904,6 +914,24 @@ class FeatureFrame(ToolFrame):
             self.log_frame.write(str(output))
         return f"删除完成，生成 {len(outputs)} 个 MKV。"
 
+    def _extract_audio_job(
+        self,
+        videos: list[Path],
+        output_dir: str | None,
+        stream_index: int,
+    ) -> str:
+        outputs = extract_audio_from_videos(
+            videos,
+            output_dir=output_dir,
+            audio_stream=stream_index,
+            audio_format="mp3",
+            log=self.log_frame.write,
+        )
+        self.log_frame.write("完成输出:")
+        for output in outputs:
+            self.log_frame.write(str(output))
+        return f"音频提取完成，生成 {len(outputs)} 个音频文件。"
+
     def _add_target_subtitles_job(
         self,
         sources: list[Path],
@@ -1003,6 +1031,16 @@ class FeatureFrame(ToolFrame):
                     all_tracks,
                     stream_index,
                 ),
+            )
+            return
+
+        if action == VIDEO_ACTION_EXTRACT_AUDIO:
+            if not mux_videos:
+                messagebox.showwarning("未选择视频", "请在“视频轨道与封装”页选择要提取音频的视频。")
+                return
+            self.run_background(
+                button,
+                lambda: self._extract_audio_job(mux_videos, output_dir, stream_index),
             )
             return
 
