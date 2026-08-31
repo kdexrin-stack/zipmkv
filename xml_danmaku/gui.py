@@ -28,11 +28,12 @@ class FeatureFrame(ToolFrame):
         self.hour_var = tk.IntVar(value=0)
         self.minute_var = tk.IntVar(value=0)
         self.second_var = tk.IntVar(value=0)
-        self.output_format_var = tk.StringVar(value="ASS 滚动字幕")
+        self.output_format_var = tk.StringVar(value="XML (清洗/平移)")
         self.scroll_dur_var = tk.DoubleVar(value=10.0)
         self.font_size_var = tk.IntVar(value=34)
         self.text_conversion_var = tk.StringVar(value="不转换")
         self._build()
+        self.toggle_format()
 
     def _build(self) -> None:
         file_frame = ttk.LabelFrame(self, text="输入 XML 弹幕", padding=(12, 8))
@@ -51,18 +52,23 @@ class FeatureFrame(ToolFrame):
         fmt_row = ttk.Frame(option_frame)
         fmt_row.pack(anchor=tk.W, pady=(0, 4))
         ttk.Label(fmt_row, text="输出格式").pack(side=tk.LEFT)
-        ttk.Combobox(
+        fmt_combo = ttk.Combobox(
             fmt_row,
             textvariable=self.output_format_var,
-            values=["ASS 滚动字幕", "XML (清洗/平移)", "SRT 字幕"],
+            values=["XML (清洗/平移)", "ASS 滚动字幕", "SRT 字幕"],
             width=18,
             state="readonly",
-        ).pack(side=tk.LEFT, padx=6)
+        )
+        fmt_combo.pack(side=tk.LEFT, padx=6)
         
         ttk.Label(fmt_row, text="滚动时长(秒)").pack(side=tk.LEFT, padx=(12, 0))
-        ttk.Spinbox(fmt_row, from_=5, to=20, width=5, textvariable=self.scroll_dur_var).pack(side=tk.LEFT, padx=6)
+        self.scroll_spin = ttk.Spinbox(fmt_row, from_=5, to=20, width=5, textvariable=self.scroll_dur_var, state=tk.DISABLED)
+        self.scroll_spin.pack(side=tk.LEFT, padx=6)
         ttk.Label(fmt_row, text="字号").pack(side=tk.LEFT, padx=(8, 0))
-        ttk.Spinbox(fmt_row, from_=18, to=72, width=5, textvariable=self.font_size_var).pack(side=tk.LEFT, padx=6)
+        self.font_size_spin = ttk.Spinbox(fmt_row, from_=18, to=72, width=5, textvariable=self.font_size_var, state=tk.DISABLED)
+        self.font_size_spin.pack(side=tk.LEFT, padx=6)
+
+        self.output_format_var.trace_add("write", lambda *_args: self.toggle_format())
 
         ttk.Checkbutton(option_frame, text="删除时间戳为负数的无效弹幕", variable=self.delete_var).pack(anchor=tk.W, pady=2)
         ttk.Checkbutton(option_frame, text="清理 ASS 样式标签并保留原颜色", variable=self.strip_var).pack(anchor=tk.W, pady=2)
@@ -152,6 +158,12 @@ class FeatureFrame(ToolFrame):
     def toggle_adjust(self) -> None:
         state = tk.NORMAL if self.adjust_var.get() else tk.DISABLED
         for widget in (self.hour_spin, self.minute_spin, self.second_spin, self.ahead_radio, self.delay_radio):
+            widget.config(state=state)
+
+    def toggle_format(self) -> None:
+        raw_fmt = self.output_format_var.get()
+        state = tk.NORMAL if "ASS" in raw_fmt else tk.DISABLED
+        for widget in (self.scroll_spin, self.font_size_spin):
             widget.config(state=state)
 
     def start(self, button: tk.Widget) -> None:
