@@ -81,11 +81,14 @@ class ZipMkvApp(tk.Tk):
         sidebar.pack(side=tk.LEFT, fill=tk.Y, padx=(0, 0))
         sidebar.pack_propagate(False)
 
+        # Subtle divider between sidebar and main workspace
+        tk.Frame(root, width=1, bg=COLORS["border"]).pack(side=tk.LEFT, fill=tk.Y)
+
         brand = ttk.Frame(sidebar, style="Sidebar.TFrame")
         brand.pack(fill=tk.X, pady=(0, 20))
         tk.Label(
             brand,
-            text="Z",
+            text="¥",
             bg=COLORS["primary"],
             fg="#ffffff",
             width=2,
