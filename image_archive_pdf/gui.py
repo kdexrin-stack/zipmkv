@@ -42,24 +42,25 @@ class FeatureFrame(ToolFrame):
         ).pack(anchor=tk.W, pady=(4, 0))
 
         top = ttk.Frame(self)
-        top.pack(fill=tk.BOTH, expand=False, pady=(8, 6))
+        top.pack(fill=tk.BOTH, expand=False, pady=(6, 8))
 
-        left = ttk.LabelFrame(top, text="输入素材", padding=10)
+        left = ttk.LabelFrame(top, text="Step 1 · 📁 输入素材列表", style="Card.TLabelframe", padding=12)
         left.pack(side=tk.LEFT, fill=tk.BOTH, expand=True, padx=(0, 10))
         buttons = ttk.Frame(left)
         buttons.pack(anchor=tk.W, pady=(0, 6))
-        ttk.Button(buttons, text="选择素材文件", command=self.choose_files).pack(side=tk.LEFT)
-        ttk.Button(buttons, text="选择文件夹扫描", command=self.choose_folder).pack(side=tk.LEFT, padx=6)
-        self.listbox = tk.Listbox(left, height=8, exportselection=False)
+        ttk.Button(buttons, text="+ 选择素材文件", command=self.choose_files).pack(side=tk.LEFT)
+        ttk.Button(buttons, text="📁 扫描文件夹", command=self.choose_folder).pack(side=tk.LEFT, padx=6)
+        ttk.Button(buttons, text="清空列表", command=self.clear_items).pack(side=tk.LEFT)
+        self.listbox = tk.Listbox(left, height=7, exportselection=False)
         self.listbox.pack(fill=tk.BOTH, expand=True, pady=4)
         bind_listbox_delete_menu(self.listbox, self.delete_selected, self.clear_items)
-        ttk.Label(left, textvariable=self.selection_summary_var, style="Muted.TLabel").pack(anchor=tk.W, pady=(4, 0))
+        ttk.Label(left, textvariable=self.selection_summary_var, style="Badge.TLabel").pack(anchor=tk.W, pady=(4, 0))
 
-        form = ttk.LabelFrame(top, text="输出与处理设置", padding=10)
+        form = ttk.LabelFrame(top, text="Step 2 · ⚙️ 整理与输出设置", style="Card.TLabelframe", padding=12)
         form.pack(side=tk.RIGHT, fill=tk.BOTH, padx=(0, 0))
         ttk.Label(form, text="输出目录").grid(row=0, column=0, sticky=tk.W, pady=4)
-        ttk.Entry(form, textvariable=self.output_var, width=36).grid(row=0, column=1, padx=6, sticky=tk.EW)
-        ttk.Button(form, text="选择", command=self.choose_output).grid(row=0, column=2)
+        ttk.Entry(form, textvariable=self.output_var, width=34).grid(row=0, column=1, padx=6, sticky=tk.EW)
+        ttk.Button(form, text="浏览", command=self.choose_output).grid(row=0, column=2)
         
         ttk.Label(form, text="输出格式").grid(row=1, column=0, sticky=tk.W, pady=4)
         ttk.Combobox(
@@ -71,7 +72,7 @@ class FeatureFrame(ToolFrame):
         ).grid(row=1, column=1, sticky=tk.W, padx=6)
         ttk.Checkbutton(form, text="合并为一个大文件", variable=self.merge_var).grid(row=2, column=0, columnspan=2, sticky=tk.W, pady=4)
         ttk.Label(form, text="合并文件名").grid(row=3, column=0, sticky=tk.W, pady=4)
-        ttk.Entry(form, textvariable=self.output_name_var, width=36).grid(row=3, column=1, padx=6, sticky=tk.EW)
+        ttk.Entry(form, textvariable=self.output_name_var, width=34).grid(row=3, column=1, padx=6, sticky=tk.EW)
         ttk.Label(form, text="文字繁简").grid(row=4, column=0, sticky=tk.W, pady=4)
         ttk.Combobox(
             form,
@@ -80,24 +81,24 @@ class FeatureFrame(ToolFrame):
             state="readonly",
             width=18,
         ).grid(row=4, column=1, sticky=tk.W, padx=6)
-        ttk.Label(form, text="解压密码（可空）").grid(row=5, column=0, sticky=tk.W, pady=4)
+        ttk.Label(form, text="解压密码").grid(row=5, column=0, sticky=tk.W, pady=4)
         ttk.Entry(form, textvariable=self.password_var, show="*").grid(row=5, column=1, sticky=tk.EW, padx=6)
 
         self.tool_selector = ArchiveToolSelector(self)
-        self.tool_selector.pack(fill=tk.X, pady=(4, 6))
+        self.tool_selector.pack(fill=tk.X, pady=(2, 6))
 
         button_row = ttk.Frame(self)
         button_row.pack(fill=tk.X, pady=(6, 8))
-        start_button = ttk.Button(button_row, text="开始整理", style="Primary.TButton")
+        start_button = ttk.Button(button_row, text="▶ 开始合并整理", style="Primary.TButton")
         start_button.config(command=lambda: self.start(start_button))
         start_button.pack(side=tk.LEFT)
-        ttk.Button(button_row, text="清空列表", command=self.clear_items).pack(side=tk.LEFT, padx=8)
-        ttk.Button(button_row, text="清空日志", command=self.log_frame.clear).pack(side=tk.LEFT)
+        ttk.Button(button_row, text="📂 打开输出目录", style="OpenDir.TButton", command=self.reveal_output_folder).pack(side=tk.LEFT, padx=10)
+        ttk.Button(button_row, text="清空日志", command=self.log_frame.clear).pack(side=tk.RIGHT)
 
         bottom = ttk.Frame(self)
         bottom.pack(fill=tk.BOTH, expand=True)
         self.log_frame.pack(in_=bottom, side=tk.LEFT, fill=tk.BOTH, expand=True)
-        preview = ttk.LabelFrame(bottom, text="效果示例预览", padding=10)
+        preview = ttk.LabelFrame(bottom, text="效果示例预览", style="Card.TLabelframe", padding=10)
         preview.pack(side=tk.RIGHT, fill=tk.BOTH, padx=(10, 0))
         self.preview_label = ttk.Label(preview, text="生成后显示", anchor=tk.CENTER, width=28)
         self.preview_label.pack(fill=tk.BOTH, expand=True)
@@ -225,5 +226,8 @@ class FeatureFrame(ToolFrame):
                 preview_callback=show_preview,
             )
             self.log_frame.write(f"完成，共生成 {len(generated)} 个文件。")
+            if generated:
+                self.last_output_dir = Path(generated[0]).parent
 
-        self.run_background(button, job)
+        out_target = self.output_var.get() or (self.current_files()[0].parent if self.current_files() else None)
+        self.run_background(button, job, output_dir=out_target)

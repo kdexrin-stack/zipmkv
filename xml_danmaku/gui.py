@@ -36,17 +36,18 @@ class FeatureFrame(ToolFrame):
         self.toggle_format()
 
     def _build(self) -> None:
-        file_frame = ttk.LabelFrame(self, text="输入 XML 弹幕", padding=(12, 8))
+        file_frame = ttk.LabelFrame(self, text="Step 1 · 📁 输入 XML 弹幕", style="Card.TLabelframe", padding=12)
         file_frame.pack(fill=tk.BOTH, expand=False, pady=(4, 6))
         file_buttons = ttk.Frame(file_frame)
         file_buttons.pack(anchor=tk.W, pady=(0, 4))
-        ttk.Button(file_buttons, text="选择 XML 文件", command=self.choose_files).pack(side=tk.LEFT)
-        ttk.Button(file_buttons, text="选择文件夹扫描", command=self.choose_folder).pack(side=tk.LEFT, padx=6)
+        ttk.Button(file_buttons, text="+ 选择 XML 文件", command=self.choose_files).pack(side=tk.LEFT)
+        ttk.Button(file_buttons, text="📁 扫描文件夹", command=self.choose_folder).pack(side=tk.LEFT, padx=6)
+        ttk.Button(file_buttons, text="清空列表", command=self.clear_files).pack(side=tk.LEFT)
         self.listbox = tk.Listbox(file_frame, height=5, exportselection=False)
         self.listbox.pack(fill=tk.BOTH, expand=True, pady=4)
         bind_listbox_delete_menu(self.listbox, self.delete_selected, self.clear_files)
 
-        option_frame = ttk.LabelFrame(self, text="处理与转换设置", padding=(12, 8))
+        option_frame = ttk.LabelFrame(self, text="Step 2 · ⚙️ 处理与转换设置", style="Card.TLabelframe", padding=12)
         option_frame.pack(fill=tk.X, pady=(2, 6))
         
         fmt_row = ttk.Frame(option_frame)
@@ -103,11 +104,11 @@ class FeatureFrame(ToolFrame):
 
         row = ttk.Frame(self)
         row.pack(fill=tk.X, pady=(6, 8))
-        start_button = ttk.Button(row, text="开始处理", style="Primary.TButton")
+        start_button = ttk.Button(row, text="▶ 开始批量处理", style="Primary.TButton")
         start_button.config(command=lambda: self.start(start_button))
         start_button.pack(side=tk.LEFT)
-        ttk.Button(row, text="清空列表", command=self.clear_files).pack(side=tk.LEFT, padx=8)
-        ttk.Button(row, text="清空日志", command=self.log_frame.clear).pack(side=tk.LEFT)
+        ttk.Button(row, text="📂 打开输出目录", style="OpenDir.TButton", command=self.reveal_output_folder).pack(side=tk.LEFT, padx=10)
+        ttk.Button(row, text="清空日志", command=self.log_frame.clear).pack(side=tk.RIGHT)
 
         self.log_frame.pack(fill=tk.BOTH, expand=True)
 
@@ -200,5 +201,9 @@ class FeatureFrame(ToolFrame):
                 self.log_frame.write(f"文字繁简转换：{mode_label(conversion_mode)}。")
             count = process_xml_files(targets, options, self.log_frame.write)
             self.log_frame.write(f"完成，共处理 {count} 个文件。")
+            if targets:
+                sub_folder = "弹幕转字幕" if out_fmt in ("ass", "srt") else "修改后的弹幕"
+                self.last_output_dir = targets[0].parent / sub_folder
 
-        self.run_background(button, job)
+        out_target = targets[0].parent if targets else None
+        self.run_background(button, job, output_dir=out_target)

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import contextlib
+from pathlib import Path
 import queue
 import threading
 import tkinter as tk
@@ -147,13 +148,30 @@ def bind_listbox_delete_menu(
     listbox.bind("<Control-A>", select_all_items)
 
 
+def open_folder_in_explorer(folder_path: str | Path | None) -> None:
+    if not folder_path:
+        return
+    path = Path(folder_path).resolve()
+    if path.is_file():
+        path = path.parent
+    path.mkdir(parents=True, exist_ok=True)
+    import os
+    import subprocess
+    if os.name == "nt":
+        subprocess.Popen(f'explorer "{path}"')
+    else:
+        import webbrowser
+        webbrowser.open(f"file://{path}")
+
+
 class ToolFrame(ttk.Frame):
     title = "工具"
     description = ""
 
     def __init__(self, master):
-        super().__init__(master, padding=18, style="Workspace.TFrame")
+        super().__init__(master, padding=(20, 16), style="Workspace.TFrame")
         self.log_frame = LogFrame(self)
+        self.last_output_dir: Path | None = None
         self._ui_pending: queue.Queue[object] = queue.Queue()
         self._ui_after_id: str | None = self.after(30, self._drain_ui_pending)
         self.bind("<Destroy>", self._cancel_ui_drain, add="+")
@@ -186,9 +204,15 @@ class ToolFrame(ttk.Frame):
     def call_in_ui(self, callback) -> None:
         self._ui_pending.put(callback)
 
-    def run_background(self, button: tk.Widget, job, done_message: str = "处理完成") -> None:
+    def reveal_output_folder(self) -> None:
+        if self.last_output_dir:
+            open_folder_in_explorer(self.last_output_dir)
+
+    def run_background(self, button: tk.Widget, job, done_message: str = "处理完成", output_dir: str | Path | None = None) -> None:
         button.config(state=tk.DISABLED)
-        self._set_app_status("正在处理，请稍候...")
+        self._set_app_status("正在处理中，请稍候...")
+        if output_dir:
+            self.last_output_dir = Path(output_dir)
         import time
 
         def worker():
@@ -200,13 +224,13 @@ class ToolFrame(ttk.Frame):
                     message = raw_msg or done_message
                 stream.flush()
                 elapsed = time.time() - start_time
-                status_msg = f"{message}（耗时 {elapsed:.1f}s）"
+                status_msg = f"{message} · 耗时 {elapsed:.1f}s"
                 self.call_in_ui(lambda: self._set_app_status(status_msg))
                 self.call_in_ui(lambda: messagebox.showinfo("完成", status_msg))
             except Exception as exc:
                 error_message = str(exc)
-                self.log_frame.write(f"任务失败: {error_message}")
-                self.call_in_ui(lambda: self._set_app_status("处理失败，请查看日志"))
+                self.log_frame.write(f"任务执行失败: {error_message}")
+                self.call_in_ui(lambda: self._set_app_status("处理失败，请查看下方日志"))
                 self.call_in_ui(lambda value=error_message: messagebox.showerror("错误", value))
             finally:
                 self.call_in_ui(lambda: button.config(state=tk.NORMAL))

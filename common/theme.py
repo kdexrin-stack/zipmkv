@@ -8,40 +8,40 @@ from tkinter import ttk
 
 
 COLORS = {
-    # Main background & surfaces (e-CNY Porcelain & Clean White)
-    "bg": "#f5f6f8",
+    # Main background & surfaces (Porcelain & Crisp Clean White)
+    "bg": "#f8fafc",
     "surface": "#ffffff",
-    "surface_muted": "#fafbfc",
-    "surface_strong": "#f0f2f5",
-    "border": "#e5e7eb",
-    "border_light": "#f0f2f5",
+    "surface_muted": "#f1f5f9",
+    "surface_strong": "#e2e8f0",
+    "border": "#e2e8f0",
+    "border_light": "#f1f5f9",
     # Text
-    "text": "#111827",
-    "muted": "#6b7280",
-    "muted_light": "#9ca3af",
-    # Primary & Accents (Digital RMB Crimson Red)
-    "primary": "#d93025",
-    "primary_hover": "#c5221f",
-    "primary_active": "#a51d1a",
-    "primary_soft": "#fef2f2",
-    "primary_soft_border": "#fecaca",
-    "accent": "#e11d48",
-    "bell": "#d97706",
-    "success": "#059669",
-    "selection": "#fee2e2",
-    "hover": "#f9fafb",
-    # Sidebar (Clean Porcelain Light Style)
-    "sidebar": "#f8fafc",
-    "sidebar_surface": "#ffffff",
+    "text": "#0f172a",
+    "muted": "#64748b",
+    "muted_light": "#94a3b8",
+    # Primary & Accents (Sapphire Blue - Clean, Fluid & Professional)
+    "primary": "#2563eb",
+    "primary_hover": "#1d4ed8",
+    "primary_active": "#1e40af",
+    "primary_soft": "#eff6ff",
+    "primary_soft_border": "#dbeafe",
+    "accent": "#f43f5e",
+    "bell": "#f59e0b",
+    "success": "#10b981",
+    "selection": "#eff6ff",
+    "hover": "#f8fafc",
+    # Sidebar (Light, Airy & Modern)
+    "sidebar": "#ffffff",
+    "sidebar_surface": "#f8fafc",
     "sidebar_hover": "#f1f5f9",
-    "sidebar_active": "#d93025",
-    "sidebar_text": "#111827",
-    "sidebar_muted": "#6b7280",
-    "sidebar_border": "#e5e7eb",
-    # Console / Log (Crisp Porcelain)
-    "console": "#fafbfc",
-    "console_text": "#111827",
-    "console_border": "#e5e7eb",
+    "sidebar_active": "#2563eb",
+    "sidebar_text": "#0f172a",
+    "sidebar_muted": "#64748b",
+    "sidebar_border": "#e2e8f0",
+    # Console / Log (Porcelain Terminal)
+    "console": "#f8fafc",
+    "console_text": "#0f172a",
+    "console_border": "#e2e8f0",
 }
 
 FONT_FAMILY = "Microsoft YaHei"
@@ -257,7 +257,7 @@ def apply_app_theme(root: tk.Misc | None = None) -> ttk.Style:
         foreground=[("selected", COLORS["primary_hover"]), ("!selected", COLORS["sidebar_text"])],
     )
     style.configure("Feature.TNotebook", background=COLORS["surface"], borderwidth=0, tabmargins=(0, 0, 0, 0))
-    style.configure("Feature.TNotebook.Tab", padding=(16, 9), font=(FONT_FAMILY, BASE_FONT_SIZE, "bold"), background=COLORS["surface_muted"], borderwidth=0)
+    style.configure("Feature.TNotebook.Tab", padding=(18, 10), font=(FONT_FAMILY, BASE_FONT_SIZE, "bold"), background=COLORS["surface_muted"], borderwidth=0)
     style.map(
         "Feature.TNotebook.Tab",
         background=[("selected", COLORS["surface"]), ("active", COLORS["hover"])],
@@ -265,6 +265,41 @@ def apply_app_theme(root: tk.Misc | None = None) -> ttk.Style:
     )
     style.configure("TLabelframe", background=COLORS["surface"], bordercolor=COLORS["border"], lightcolor=COLORS["border"], darkcolor=COLORS["border"], borderwidth=1, relief=tk.SOLID)
     style.configure("TLabelframe.Label", background=COLORS["surface"], foreground=COLORS["text"], font=(FONT_FAMILY, BASE_FONT_SIZE, "bold"))
+    
+    style.configure("Card.TLabelframe", background=COLORS["surface"], bordercolor=COLORS["border"], lightcolor=COLORS["border"], darkcolor=COLORS["border"], borderwidth=1, relief=tk.SOLID, padding=(14, 10))
+    style.configure("Card.TLabelframe.Label", background=COLORS["surface"], foreground=COLORS["text"], font=(FONT_FAMILY, BASE_FONT_SIZE + 1, "bold"))
+
+    style.configure("Badge.TLabel", background=COLORS["primary_soft"], foreground=COLORS["primary"], font=(FONT_FAMILY, 9, "bold"), padding=(8, 3))
+    style.configure("SuccessBadge.TLabel", background="#dcfce7", foreground="#15803d", font=(FONT_FAMILY, 9, "bold"), padding=(8, 3))
+    style.configure("WarningBadge.TLabel", background="#fef3c7", foreground="#b45309", font=(FONT_FAMILY, 9, "bold"), padding=(8, 3))
+
+    style.configure(
+        "OpenDir.TButton",
+        padding=(14, 8),
+        background=COLORS["primary_soft"],
+        foreground=COLORS["primary_hover"],
+        bordercolor=COLORS["primary_soft_border"],
+        borderwidth=1,
+        relief=tk.FLAT,
+        font=(FONT_FAMILY, BASE_FONT_SIZE, "bold"),
+    )
+    style.map(
+        "OpenDir.TButton",
+        background=[("pressed", COLORS["selection"]), ("active", "#dbeafe")],
+        bordercolor=[("active", COLORS["primary"])],
+    )
+
+    style.configure(
+        "Horizontal.TProgressbar",
+        background=COLORS["primary"],
+        troughcolor=COLORS["surface_muted"],
+        bordercolor=COLORS["border"],
+        lightcolor=COLORS["primary"],
+        darkcolor=COLORS["primary"],
+        borderwidth=0,
+        thickness=8,
+    )
+
     style.configure("Vertical.TScrollbar", background=COLORS["border"], troughcolor=COLORS["surface_muted"], borderwidth=0, arrowcolor=COLORS["muted"])
     style.configure("Horizontal.TScrollbar", background=COLORS["border"], troughcolor=COLORS["surface_muted"], borderwidth=0, arrowcolor=COLORS["muted"])
     style.map(

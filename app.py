@@ -85,15 +85,15 @@ class ZipMkvApp(tk.Tk):
         tk.Frame(root, width=1, bg=COLORS["border"]).pack(side=tk.LEFT, fill=tk.Y)
 
         brand = ttk.Frame(sidebar, style="Sidebar.TFrame")
-        brand.pack(fill=tk.X, pady=(0, 20))
+        brand.pack(fill=tk.X, pady=(0, 18))
         tk.Label(
             brand,
-            text="¥",
+            text="Z",
             bg=COLORS["primary"],
             fg="#ffffff",
             width=2,
             height=1,
-            font=(FONT_FAMILY, 15, "bold"),
+            font=(FONT_FAMILY, 14, "bold"),
             bd=0,
         ).pack(side=tk.LEFT, padx=(0, 10))
         brand_text = ttk.Frame(brand, style="Sidebar.TFrame")
@@ -101,7 +101,7 @@ class ZipMkvApp(tk.Tk):
         ttk.Label(brand_text, text="zipmkv", style="AppTitle.TLabel").pack(anchor=tk.W)
         ttk.Label(brand_text, text=f"DESKTOP v{APP_VERSION}", style="SidebarMuted.TLabel").pack(anchor=tk.W)
 
-        ttk.Label(sidebar, text="功能模块", style="SidebarSection.TLabel").pack(anchor=tk.W, pady=(0, 8))
+        ttk.Label(sidebar, text="功能模块导航", style="SidebarSection.TLabel").pack(anchor=tk.W, pady=(0, 8))
 
         groups: dict[str, list[FeatureSpec]] = {}
         for feature in FEATURES:

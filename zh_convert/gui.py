@@ -31,19 +31,20 @@ class FeatureFrame(ToolFrame):
         top = ttk.Frame(self)
         top.pack(fill=tk.BOTH, expand=False, pady=(4, 6))
 
-        input_frame = ttk.LabelFrame(top, text="待转换文本素材", padding=(12, 8))
+        input_frame = ttk.LabelFrame(top, text="Step 1 · 📁 待转换文本素材", style="Card.TLabelframe", padding=12)
         input_frame.pack(side=tk.LEFT, fill=tk.BOTH, expand=True, padx=(0, 10))
         buttons = ttk.Frame(input_frame)
         buttons.pack(anchor=tk.W, pady=(0, 4))
-        ttk.Button(buttons, text="选择文本/字幕/XML", command=self.choose_files).pack(side=tk.LEFT)
-        ttk.Button(buttons, text="选择文件夹扫描", command=self.choose_folder).pack(side=tk.LEFT, padx=6)
-        self.listbox = tk.Listbox(input_frame, height=7, exportselection=False)
+        ttk.Button(buttons, text="+ 选择文本/字幕/XML", command=self.choose_files).pack(side=tk.LEFT)
+        ttk.Button(buttons, text="📁 扫描文件夹", command=self.choose_folder).pack(side=tk.LEFT, padx=6)
+        ttk.Button(buttons, text="清空列表", command=self.clear_items).pack(side=tk.LEFT)
+        self.listbox = tk.Listbox(input_frame, height=6, exportselection=False)
         self.listbox.pack(fill=tk.BOTH, expand=True, pady=4)
         bind_listbox_delete_menu(self.listbox, self.delete_selected, self.clear_items)
         self.listbox.bind("<<ListboxSelect>>", lambda _event: self.update_preview())
-        ttk.Label(input_frame, textvariable=self.summary_var, style="Muted.TLabel").pack(anchor=tk.W, pady=(4, 0))
+        ttk.Label(input_frame, textvariable=self.summary_var, style="Badge.TLabel").pack(anchor=tk.W, pady=(4, 0))
 
-        form = ttk.LabelFrame(top, text="繁简转换规则与输出", padding=(12, 8))
+        form = ttk.LabelFrame(top, text="Step 2 · ⚙️ 繁简转换规则与输出", style="Card.TLabelframe", padding=12)
         form.pack(side=tk.RIGHT, fill=tk.BOTH)
         ttk.Label(form, text="转换方向").grid(row=0, column=0, sticky=tk.W, pady=4)
         ttk.Combobox(
@@ -64,16 +65,16 @@ class FeatureFrame(ToolFrame):
             state="readonly",
         ).grid(row=1, column=1, sticky=tk.W, padx=6)
         ttk.Label(form, text="输出目录").grid(row=2, column=0, sticky=tk.W, pady=4)
-        ttk.Entry(form, textvariable=self.output_var, width=32).grid(row=2, column=1, sticky=tk.EW, padx=6)
-        ttk.Button(form, text="选择", command=self.choose_output).grid(row=2, column=2)
+        ttk.Entry(form, textvariable=self.output_var, width=30).grid(row=2, column=1, sticky=tk.EW, padx=6)
+        ttk.Button(form, text="浏览", command=self.choose_output).grid(row=2, column=2)
         ttk.Label(
             form,
             text="默认不改源文件，在原路径新建“繁简转换输出”文件夹。",
             style="Muted.TLabel",
-            wraplength=380,
+            wraplength=360,
         ).grid(row=3, column=0, columnspan=3, sticky=tk.W, pady=(8, 0))
 
-        preview = ttk.LabelFrame(self, text="转换效果实时对比预览", padding=(10, 8))
+        preview = ttk.LabelFrame(self, text="转换效果实时对比预览", style="Card.TLabelframe", padding=10)
         preview.pack(fill=tk.BOTH, expand=True, pady=(2, 6))
         preview.columnconfigure(0, weight=1)
         preview.columnconfigure(1, weight=1)
@@ -87,12 +88,12 @@ class FeatureFrame(ToolFrame):
 
         row = ttk.Frame(self)
         row.pack(fill=tk.X, pady=(6, 8))
-        start_button = ttk.Button(row, text="开始转换", style="Primary.TButton")
+        start_button = ttk.Button(row, text="▶ 开始批量转换", style="Primary.TButton")
         start_button.config(command=lambda: self.start(start_button))
         start_button.pack(side=tk.LEFT)
-        ttk.Button(row, text="刷新预览", command=self.update_preview).pack(side=tk.LEFT, padx=8)
-        ttk.Button(row, text="清空列表", command=self.clear_items).pack(side=tk.LEFT, padx=(0, 8))
-        ttk.Button(row, text="清空日志", command=self.log_frame.clear).pack(side=tk.LEFT)
+        ttk.Button(row, text="📂 打开输出目录", style="OpenDir.TButton", command=self.reveal_output_folder).pack(side=tk.LEFT, padx=10)
+        ttk.Button(row, text="刷新预览", command=self.update_preview).pack(side=tk.LEFT)
+        ttk.Button(row, text="清空日志", command=self.log_frame.clear).pack(side=tk.RIGHT)
 
         self.log_frame.pack(fill=tk.BOTH, expand=True)
 
@@ -222,7 +223,10 @@ class FeatureFrame(ToolFrame):
             if not outputs:
                 raise RuntimeError("没有生成任何转换结果。")
             self.log_frame.write(f"完成，共生成 {len(outputs)} 个文件。")
+            if outputs:
+                self.last_output_dir = Path(outputs[0]).parent
             self.call_in_ui(self.update_preview)
             return f"转换完成，生成 {len(outputs)} 个文件。"
 
-        self.run_background(button, job)
+        out_target = self.output_var.get() or (files[0].parent / "繁简转换输出" if files else None)
+        self.run_background(button, job, output_dir=out_target)

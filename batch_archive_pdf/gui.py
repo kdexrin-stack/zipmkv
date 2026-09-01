@@ -29,45 +29,46 @@ class FeatureFrame(ToolFrame):
 
     def _build(self) -> None:
         top = ttk.Frame(self)
-        top.pack(fill=tk.BOTH, expand=False, pady=8)
+        top.pack(fill=tk.BOTH, expand=False, pady=(6, 8))
 
-        left = ttk.Frame(top)
-        left.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+        left = ttk.LabelFrame(top, text="Step 1 · 📁 输入压缩包列表", style="Card.TLabelframe", padding=12)
+        left.pack(side=tk.LEFT, fill=tk.BOTH, expand=True, padx=(0, 10))
         file_buttons = ttk.Frame(left)
-        file_buttons.pack(anchor=tk.W)
-        ttk.Button(file_buttons, text="选择单/多个压缩包", command=self.choose_archives).pack(side=tk.LEFT)
-        ttk.Button(file_buttons, text="选择文件夹扫描", command=self.choose_folder).pack(side=tk.LEFT, padx=6)
-        self.listbox = tk.Listbox(left, height=8)
-        self.listbox.pack(fill=tk.BOTH, expand=True, pady=5)
+        file_buttons.pack(anchor=tk.W, pady=(0, 6))
+        ttk.Button(file_buttons, text="+ 选择压缩包", command=self.choose_archives).pack(side=tk.LEFT)
+        ttk.Button(file_buttons, text="📁 扫描文件夹", command=self.choose_folder).pack(side=tk.LEFT, padx=6)
+        ttk.Button(file_buttons, text="清空列表", command=self.clear_archives).pack(side=tk.LEFT)
+        self.listbox = tk.Listbox(left, height=7, exportselection=False)
+        self.listbox.pack(fill=tk.BOTH, expand=True, pady=4)
         bind_listbox_delete_menu(self.listbox, self.delete_selected, self.clear_archives)
 
-        form = ttk.Frame(top)
-        form.pack(side=tk.RIGHT, fill=tk.X, padx=(10, 0))
+        form = ttk.LabelFrame(top, text="Step 2 · ⚙️ 转换设置", style="Card.TLabelframe", padding=12)
+        form.pack(side=tk.RIGHT, fill=tk.BOTH, padx=(0, 0))
         ttk.Label(form, text="输出目录").grid(row=0, column=0, sticky=tk.W, pady=4)
-        ttk.Entry(form, textvariable=self.output_var, width=42).grid(row=0, column=1, padx=5)
-        ttk.Button(form, text="选择", command=self.choose_output).grid(row=0, column=2)
-        ttk.Label(form, text="解压密码（可空）").grid(row=1, column=0, sticky=tk.W, pady=4)
-        ttk.Entry(form, textvariable=self.password_var, show="*").grid(row=1, column=1, sticky=tk.EW, padx=5)
+        ttk.Entry(form, textvariable=self.output_var, width=34).grid(row=0, column=1, padx=6, sticky=tk.EW)
+        ttk.Button(form, text="浏览", command=self.choose_output).grid(row=0, column=2)
+        ttk.Label(form, text="解压密码").grid(row=1, column=0, sticky=tk.W, pady=4)
+        ttk.Entry(form, textvariable=self.password_var, show="*").grid(row=1, column=1, sticky=tk.EW, padx=6)
 
         self.tool_selector = ArchiveToolSelector(self)
-        self.tool_selector.pack(fill=tk.X, pady=6)
+        self.tool_selector.pack(fill=tk.X, pady=(2, 6))
 
         button_row = ttk.Frame(self)
-        button_row.pack(fill=tk.X, pady=8)
-        start_button = ttk.Button(button_row, text="开始转换", style="Primary.TButton")
+        button_row.pack(fill=tk.X, pady=(6, 8))
+        start_button = ttk.Button(button_row, text="▶ 开始批量转换", style="Primary.TButton")
         start_button.config(command=lambda: self.start(start_button))
         start_button.pack(side=tk.LEFT)
-        ttk.Button(button_row, text="清空列表", command=self.clear_archives).pack(side=tk.LEFT, padx=8)
-        ttk.Button(button_row, text="清空日志", command=self.log_frame.clear).pack(side=tk.LEFT)
+        ttk.Button(button_row, text="📂 打开输出目录", style="OpenDir.TButton", command=self.reveal_output_folder).pack(side=tk.LEFT, padx=10)
+        ttk.Button(button_row, text="清空日志", command=self.log_frame.clear).pack(side=tk.RIGHT)
 
         bottom = ttk.Frame(self)
         bottom.pack(fill=tk.BOTH, expand=True)
         self.log_frame.pack(in_=bottom, side=tk.LEFT, fill=tk.BOTH, expand=True)
-        preview = ttk.LabelFrame(bottom, text="随机效果示例", padding=8)
+        preview = ttk.LabelFrame(bottom, text="效果示例预览", style="Card.TLabelframe", padding=10)
         preview.pack(side=tk.RIGHT, fill=tk.BOTH, padx=(10, 0))
         self.preview_label = ttk.Label(preview, text="生成后显示", anchor=tk.CENTER, width=28)
         self.preview_label.pack(fill=tk.BOTH, expand=True)
-        ttk.Label(preview, textvariable=self.preview_var, wraplength=220, style="Muted.TLabel").pack(fill=tk.X)
+        ttk.Label(preview, textvariable=self.preview_var, wraplength=220, style="Muted.TLabel").pack(fill=tk.X, pady=(4, 0))
 
     def choose_archives(self) -> None:
         paths = filedialog.askopenfilenames(
@@ -145,5 +146,8 @@ class FeatureFrame(ToolFrame):
                 preview_callback=show_preview,
             )
             self.log_frame.write(f"完成，共生成 {len(generated)} 个 PDF。")
+            if generated:
+                self.last_output_dir = Path(generated[0]).parent
 
-        self.run_background(button, job)
+        out_target = self.output_var.get() or (self.current_archives()[0].parent if self.current_archives() else None)
+        self.run_background(button, job, output_dir=out_target)

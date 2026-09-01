@@ -350,17 +350,18 @@ class FeatureFrame(ToolFrame):
     def _build_result_panel(self, bottom: ttk.Frame) -> None:
         action_row = ttk.Frame(bottom, style="Surface.TFrame")
         action_row.pack(fill=tk.X, pady=(6, 8))
-        self.primary_action_var = tk.StringVar(value="开始修改字幕")
+        self.primary_action_var = tk.StringVar(value="▶ 开始修改字幕")
         self.primary_action_button = ttk.Button(action_row, textvariable=self.primary_action_var, style="Primary.TButton")
         self.primary_action_button.configure(command=self._run_active_workspace)
         self.primary_action_button.pack(side=tk.LEFT)
+        ttk.Button(action_row, text="📂 打开输出目录", style="OpenDir.TButton", command=self.reveal_output_folder).pack(side=tk.LEFT, padx=10)
         self.probe_button = ttk.Button(
             action_row,
             text="检测字幕源/轨道",
             command=lambda: self.probe_all_videos(self.probe_button),
         )
-        self.probe_button.pack(side=tk.LEFT, padx=8)
-        ttk.Button(action_row, text="清空日志", command=self.log_frame.clear).pack(side=tk.LEFT)
+        self.probe_button.pack(side=tk.LEFT, padx=(0, 8))
+        ttk.Button(action_row, text="清空日志", command=self.log_frame.clear).pack(side=tk.RIGHT)
 
         result_panes = ttk.PanedWindow(bottom, orient=tk.HORIZONTAL)
         result_panes.pack(fill=tk.BOTH, expand=True)
@@ -381,9 +382,9 @@ class FeatureFrame(ToolFrame):
         if not hasattr(self, "primary_action_var"):
             return
         if self.notebook.index("current") == 0:
-            self.primary_action_var.set("开始修改字幕")
+            self.primary_action_var.set("▶ 开始修改字幕")
         else:
-            self.primary_action_var.set("执行视频操作")
+            self.primary_action_var.set("▶ 执行视频操作")
 
     def _run_active_workspace(self) -> None:
         if self.notebook.index("current") == 0:

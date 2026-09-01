@@ -42,7 +42,7 @@ class FeatureFrame(ToolFrame):
         self.refresh_preview()
 
     def _build(self) -> None:
-        mode_frame = ttk.LabelFrame(self, text="命名模式", padding=(12, 8))
+        mode_frame = ttk.LabelFrame(self, text="Step 1 · 🔀 命名模式选择", style="Card.TLabelframe", padding=(12, 8))
         mode_frame.pack(fill=tk.X, pady=(4, 6))
         ttk.Radiobutton(
             mode_frame,
@@ -77,7 +77,7 @@ class FeatureFrame(ToolFrame):
         )
         bind_listbox_delete_menu(self.b_list, self.delete_selected_b, self.clear_b)
 
-        rule_frame = ttk.LabelFrame(self, text="编号与命名规则设置", padding=(12, 8))
+        rule_frame = ttk.LabelFrame(self, text="Step 2 · ⚙️ 编号与命名规则设置", style="Card.TLabelframe", padding=(12, 8))
         rule_frame.pack(fill=tk.X, pady=(2, 6))
         rule_frame.columnconfigure(7, weight=1)
         self._add_rule_label(rule_frame, "固定前缀", 0, 0)
@@ -129,9 +129,9 @@ class FeatureFrame(ToolFrame):
             pady=(4, 0),
         )
 
-        preview_frame = ttk.LabelFrame(self, text="重命名效果预览", padding=8)
+        preview_frame = ttk.LabelFrame(self, text="重命名效果即时预览", style="Card.TLabelframe", padding=8)
         preview_frame.pack(fill=tk.BOTH, expand=True, pady=(2, 6))
-        self.preview = tk.Listbox(preview_frame, height=6, exportselection=False)
+        self.preview = tk.Listbox(preview_frame, height=5, exportselection=False)
         configure_listbox(self.preview)
         self.preview.pack(fill=tk.BOTH, expand=True)
 
@@ -139,15 +139,17 @@ class FeatureFrame(ToolFrame):
         output_row.pack(fill=tk.X, pady=(2, 4))
         ttk.Label(output_row, text="输出目录").pack(side=tk.LEFT)
         ttk.Entry(output_row, textvariable=self.output_var).pack(side=tk.LEFT, fill=tk.X, expand=True, padx=6)
-        ttk.Button(output_row, text="选择", command=self.choose_output).pack(side=tk.LEFT)
+        ttk.Button(output_row, text="浏览", command=self.choose_output).pack(side=tk.LEFT)
 
         row = ttk.Frame(self)
         row.pack(fill=tk.X, pady=(6, 8))
-        start_button = ttk.Button(row, text="生成重命名副本", style="Primary.TButton")
+        start_button = ttk.Button(row, text="▶ 生成重命名副本", style="Primary.TButton")
         start_button.config(command=lambda: self.start(start_button))
         start_button.pack(side=tk.LEFT)
-        ttk.Button(row, text="刷新预览", command=self.refresh_preview).pack(side=tk.LEFT, padx=8)
-        ttk.Button(row, text="清空列表", command=self.clear_all).pack(side=tk.LEFT)
+        ttk.Button(row, text="📂 打开输出目录", style="OpenDir.TButton", command=self.reveal_output_folder).pack(side=tk.LEFT, padx=10)
+        ttk.Button(row, text="刷新预览", command=self.refresh_preview).pack(side=tk.LEFT)
+        ttk.Button(row, text="清空列表", command=self.clear_all).pack(side=tk.LEFT, padx=8)
+        ttk.Button(row, text="清空日志", command=self.log_frame.clear).pack(side=tk.RIGHT)
 
         self.log_frame.pack(fill=tk.BOTH, expand=True)
 
@@ -157,15 +159,15 @@ class FeatureFrame(ToolFrame):
         self.manual_widgets.append(label)
 
     def _build_file_panel(self, master, title: str, file_command, folder_command):
-        frame = ttk.LabelFrame(master, text=title, padding=6)
+        frame = ttk.LabelFrame(master, text=title, style="Card.TLabelframe", padding=8)
         frame.pack(side=tk.LEFT, fill=tk.BOTH, expand=True, padx=5)
-        listbox = tk.Listbox(frame, height=8, exportselection=False)
+        listbox = tk.Listbox(frame, height=6, exportselection=False)
         listbox.pack(fill=tk.BOTH, expand=True)
         button_row = ttk.Frame(frame)
-        button_row.pack(anchor=tk.W, pady=5)
-        file_button = ttk.Button(button_row, text="选择文件", command=file_command)
+        button_row.pack(anchor=tk.W, pady=4)
+        file_button = ttk.Button(button_row, text="+ 选择文件", command=file_command)
         file_button.pack(side=tk.LEFT)
-        folder_button = ttk.Button(button_row, text="选择文件夹扫描", command=folder_command)
+        folder_button = ttk.Button(button_row, text="📁 扫描文件夹", command=folder_command)
         folder_button.pack(side=tk.LEFT, padx=6)
         if not self.a_widgets:
             self.a_widgets.extend([listbox, file_button, folder_button])
@@ -369,5 +371,8 @@ class FeatureFrame(ToolFrame):
                 raise RuntimeError("没有可处理的重命名配对。")
             result = copy_by_pairs(pairs, self.output_var.get() or None, self.log_frame.write)
             self.log_frame.write(f"完成：成功复制 {result.success}，失败 {result.failed}。源文件未改动。")
+            if pairs:
+                self.last_output_dir = Path(self.output_var.get() or pairs[0].target_path.parent)
 
-        self.run_background(button, job)
+        out_target = self.output_var.get() or (targets[0].parent if targets else None)
+        self.run_background(button, job, output_dir=out_target)
