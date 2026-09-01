@@ -29,65 +29,59 @@ class FeatureFrame(ToolFrame):
 
     def _build(self) -> None:
         top = ttk.Frame(self)
-        top.pack(fill=tk.BOTH, expand=False, pady=(4, 6))
+        top.pack(fill=tk.BOTH, expand=False, pady=(2, 4))
 
-        input_frame = ttk.LabelFrame(top, text="Step 1 · 📁 待转换文本素材", style="Card.TLabelframe", padding=12)
-        input_frame.pack(side=tk.LEFT, fill=tk.BOTH, expand=True, padx=(0, 10))
+        input_frame = ttk.LabelFrame(top, text="Step 1 · 📁 待转换文本素材", style="Card.TLabelframe", padding=8)
+        input_frame.pack(side=tk.LEFT, fill=tk.BOTH, expand=True, padx=(0, 8))
         buttons = ttk.Frame(input_frame)
         buttons.pack(anchor=tk.W, pady=(0, 4))
         ttk.Button(buttons, text="+ 选择文本/字幕/XML", command=self.choose_files).pack(side=tk.LEFT)
         ttk.Button(buttons, text="📁 扫描文件夹", command=self.choose_folder).pack(side=tk.LEFT, padx=6)
-        ttk.Button(buttons, text="清空列表", command=self.clear_items).pack(side=tk.LEFT)
-        self.listbox = tk.Listbox(input_frame, height=6, exportselection=False)
-        self.listbox.pack(fill=tk.BOTH, expand=True, pady=4)
+        ttk.Button(buttons, text="清空", command=self.clear_items).pack(side=tk.LEFT)
+        self.listbox = tk.Listbox(input_frame, height=3, exportselection=False)
+        self.listbox.pack(fill=tk.BOTH, expand=True, pady=2)
         bind_listbox_delete_menu(self.listbox, self.delete_selected, self.clear_items)
         self.listbox.bind("<<ListboxSelect>>", lambda _event: self.update_preview())
-        ttk.Label(input_frame, textvariable=self.summary_var, style="Badge.TLabel").pack(anchor=tk.W, pady=(4, 0))
+        ttk.Label(input_frame, textvariable=self.summary_var, style="Badge.TLabel").pack(anchor=tk.W, pady=(2, 0))
 
-        form = ttk.LabelFrame(top, text="Step 2 · ⚙️ 繁简转换规则与输出", style="Card.TLabelframe", padding=12)
+        form = ttk.LabelFrame(top, text="Step 2 · ⚙️ 繁简转换规则与输出", style="Card.TLabelframe", padding=8)
         form.pack(side=tk.RIGHT, fill=tk.BOTH)
-        ttk.Label(form, text="转换方向").grid(row=0, column=0, sticky=tk.W, pady=4)
+        ttk.Label(form, text="转换方向").grid(row=0, column=0, sticky=tk.W, pady=2)
         ttk.Combobox(
             form,
             textvariable=self.mode_var,
             values=[mode.label for mode in MODES if mode.key != "none"],
-            width=20,
+            width=18,
             state="readonly",
-        ).grid(row=0, column=1, sticky=tk.W, padx=6)
+        ).grid(row=0, column=1, sticky=tk.W, padx=4)
         self.mode_var.trace_add("write", lambda *_args: self.update_preview())
         
-        ttk.Label(form, text="输出格式").grid(row=1, column=0, sticky=tk.W, pady=4)
+        ttk.Label(form, text="输出格式").grid(row=1, column=0, sticky=tk.W, pady=2)
         ttk.Combobox(
             form,
             textvariable=self.output_format_var,
             values=["same", "txt", "srt", "ass", "vtt", "xml", "md", "html"],
-            width=10,
+            width=8,
             state="readonly",
-        ).grid(row=1, column=1, sticky=tk.W, padx=6)
-        ttk.Label(form, text="输出目录").grid(row=2, column=0, sticky=tk.W, pady=4)
-        ttk.Entry(form, textvariable=self.output_var, width=30).grid(row=2, column=1, sticky=tk.EW, padx=6)
+        ).grid(row=1, column=1, sticky=tk.W, padx=4)
+        ttk.Label(form, text="输出目录").grid(row=2, column=0, sticky=tk.W, pady=2)
+        ttk.Entry(form, textvariable=self.output_var, width=24).grid(row=2, column=1, sticky=tk.EW, padx=4)
         ttk.Button(form, text="浏览", command=self.choose_output).grid(row=2, column=2)
-        ttk.Label(
-            form,
-            text="默认不改源文件，在原路径新建“繁简转换输出”文件夹。",
-            style="Muted.TLabel",
-            wraplength=360,
-        ).grid(row=3, column=0, columnspan=3, sticky=tk.W, pady=(8, 0))
 
-        preview = ttk.LabelFrame(self, text="转换效果实时对比预览", style="Card.TLabelframe", padding=10)
-        preview.pack(fill=tk.BOTH, expand=True, pady=(2, 6))
+        preview = ttk.LabelFrame(self, text="转换效果实时对比预览", style="Card.TLabelframe", padding=6)
+        preview.pack(fill=tk.BOTH, expand=True, pady=(2, 4))
         preview.columnconfigure(0, weight=1)
         preview.columnconfigure(1, weight=1)
-        ttk.Label(preview, text="原文内容预览", style="Muted.TLabel").grid(row=0, column=0, sticky=tk.W, pady=(0, 2))
-        ttk.Label(preview, text="转换后效果预览", style="Muted.TLabel").grid(row=0, column=1, sticky=tk.W, pady=(0, 2))
+        ttk.Label(preview, text="原文内容预览", style="Muted.TLabel").grid(row=0, column=0, sticky=tk.W, pady=(0, 1))
+        ttk.Label(preview, text="转换后效果预览", style="Muted.TLabel").grid(row=0, column=1, sticky=tk.W, pady=(0, 1))
         self.before_text = self._build_preview_text(preview)
-        self.before_text.grid(row=1, column=0, sticky=tk.NSEW, padx=(0, 6))
+        self.before_text.grid(row=1, column=0, sticky=tk.NSEW, padx=(0, 4))
         self.after_text = self._build_preview_text(preview)
-        self.after_text.grid(row=1, column=1, sticky=tk.NSEW, padx=(6, 0))
+        self.after_text.grid(row=1, column=1, sticky=tk.NSEW, padx=(4, 0))
         preview.rowconfigure(1, weight=1)
 
         row = ttk.Frame(self)
-        row.pack(fill=tk.X, pady=(6, 8))
+        row.pack(fill=tk.X, pady=(4, 6))
         start_button = ttk.Button(row, text="▶ 开始批量转换", style="Primary.TButton")
         start_button.config(command=lambda: self.start(start_button))
         start_button.pack(side=tk.LEFT)
@@ -98,7 +92,7 @@ class FeatureFrame(ToolFrame):
         self.log_frame.pack(fill=tk.BOTH, expand=True)
 
     def _build_preview_text(self, master) -> scrolledtext.ScrolledText:
-        widget = scrolledtext.ScrolledText(master, height=6, wrap=tk.WORD)
+        widget = scrolledtext.ScrolledText(master, height=4, wrap=tk.WORD)
         widget.configure(
             bg=COLORS["surface"],
             fg=COLORS["text"],

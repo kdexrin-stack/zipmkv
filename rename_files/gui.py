@@ -77,12 +77,12 @@ class FeatureFrame(ToolFrame):
         )
         bind_listbox_delete_menu(self.b_list, self.delete_selected_b, self.clear_b)
 
-        rule_frame = ttk.LabelFrame(self, text="Step 2 · ⚙️ 编号与命名规则设置", style="Card.TLabelframe", padding=(12, 8))
-        rule_frame.pack(fill=tk.X, pady=(2, 6))
+        rule_frame = ttk.LabelFrame(self, text="Step 2 · ⚙️ 编号与命名规则设置", style="Card.TLabelframe", padding=(8, 6))
+        rule_frame.pack(fill=tk.X, pady=(2, 4))
         rule_frame.columnconfigure(7, weight=1)
         self._add_rule_label(rule_frame, "固定前缀", 0, 0)
-        prefix_entry = ttk.Entry(rule_frame, textvariable=self.prefix_var, width=14)
-        prefix_entry.grid(row=0, column=1, sticky=tk.W, padx=(4, 12))
+        prefix_entry = ttk.Entry(rule_frame, textvariable=self.prefix_var, width=12)
+        prefix_entry.grid(row=0, column=1, sticky=tk.W, padx=(4, 8))
         self.manual_widgets.append(prefix_entry)
 
         self._add_rule_label(rule_frame, "编号样式", 0, 2)
@@ -90,48 +90,43 @@ class FeatureFrame(ToolFrame):
             rule_frame,
             textvariable=self.number_style_var,
             values=["1", "01", "001", "ep1", "ep01", "EP01", "E01", "自定义模板"],
-            width=12,
+            width=10,
             state="readonly",
         )
-        style_combo.grid(row=0, column=3, sticky=tk.W, padx=(4, 12))
+        style_combo.grid(row=0, column=3, sticky=tk.W, padx=(4, 8))
         style_combo.bind("<<ComboboxSelected>>", lambda _event: self.refresh_preview())
         self.manual_widgets.append(style_combo)
 
         self._add_rule_label(rule_frame, "固定后缀", 0, 4)
-        suffix_entry = ttk.Entry(rule_frame, textvariable=self.suffix_var, width=14)
-        suffix_entry.grid(row=0, column=5, sticky=tk.W, padx=(4, 12))
+        suffix_entry = ttk.Entry(rule_frame, textvariable=self.suffix_var, width=12)
+        suffix_entry.grid(row=0, column=5, sticky=tk.W, padx=(4, 8))
         self.manual_widgets.append(suffix_entry)
 
         self._add_rule_label(rule_frame, "起始序号", 1, 0)
-        start_spin = ttk.Spinbox(rule_frame, from_=0, to=9999, width=6, textvariable=self.start_var)
-        start_spin.grid(row=1, column=1, sticky=tk.W, padx=(4, 12), pady=(6, 0))
+        start_spin = ttk.Spinbox(rule_frame, from_=0, to=9999, width=5, textvariable=self.start_var)
+        start_spin.grid(row=1, column=1, sticky=tk.W, padx=(4, 8), pady=(4, 0))
         self.manual_widgets.append(start_spin)
 
         self._add_rule_label(rule_frame, "递增步进", 1, 2)
-        step_spin = ttk.Spinbox(rule_frame, from_=1, to=999, width=6, textvariable=self.step_var)
-        step_spin.grid(row=1, column=3, sticky=tk.W, padx=(4, 12), pady=(6, 0))
+        step_spin = ttk.Spinbox(rule_frame, from_=1, to=999, width=5, textvariable=self.step_var)
+        step_spin.grid(row=1, column=3, sticky=tk.W, padx=(4, 8), pady=(4, 0))
         self.manual_widgets.append(step_spin)
 
         self._add_rule_label(rule_frame, "自定义模板", 1, 4)
-        custom_entry = ttk.Entry(rule_frame, textvariable=self.custom_template_var, width=28)
-        custom_entry.grid(row=1, column=5, columnspan=3, sticky=tk.EW, padx=(4, 0), pady=(6, 0))
+        custom_entry = ttk.Entry(rule_frame, textvariable=self.custom_template_var, width=24)
+        custom_entry.grid(row=1, column=5, columnspan=3, sticky=tk.EW, padx=(4, 0), pady=(4, 0))
         self.manual_widgets.append(custom_entry)
-        ttk.Label(
-            rule_frame,
-            text="提示：模板支持 {num}、{num:02d}、{num:03d}；例如：视频ep{num:02d}最终版",
-            style="Muted.TLabel",
-        ).grid(row=2, column=0, columnspan=8, sticky=tk.W, pady=(6, 0))
         ttk.Label(rule_frame, textvariable=self.example_var, style="Eyebrow.TLabel").grid(
-            row=3,
+            row=2,
             column=0,
             columnspan=8,
             sticky=tk.W,
-            pady=(4, 0),
+            pady=(2, 0),
         )
 
-        preview_frame = ttk.LabelFrame(self, text="重命名效果即时预览", style="Card.TLabelframe", padding=8)
-        preview_frame.pack(fill=tk.BOTH, expand=True, pady=(2, 6))
-        self.preview = tk.Listbox(preview_frame, height=5, exportselection=False)
+        preview_frame = ttk.LabelFrame(self, text="重命名效果即时预览", style="Card.TLabelframe", padding=6)
+        preview_frame.pack(fill=tk.BOTH, expand=True, pady=(2, 4))
+        self.preview = tk.Listbox(preview_frame, height=3, exportselection=False)
         configure_listbox(self.preview)
         self.preview.pack(fill=tk.BOTH, expand=True)
 
@@ -142,33 +137,33 @@ class FeatureFrame(ToolFrame):
         ttk.Button(output_row, text="浏览", command=self.choose_output).pack(side=tk.LEFT)
 
         row = ttk.Frame(self)
-        row.pack(fill=tk.X, pady=(6, 8))
+        row.pack(fill=tk.X, pady=(4, 6))
         start_button = ttk.Button(row, text="▶ 生成重命名副本", style="Primary.TButton")
         start_button.config(command=lambda: self.start(start_button))
         start_button.pack(side=tk.LEFT)
         ttk.Button(row, text="📂 打开输出目录", style="OpenDir.TButton", command=self.reveal_output_folder).pack(side=tk.LEFT, padx=10)
         ttk.Button(row, text="刷新预览", command=self.refresh_preview).pack(side=tk.LEFT)
-        ttk.Button(row, text="清空列表", command=self.clear_all).pack(side=tk.LEFT, padx=8)
+        ttk.Button(row, text="清空", command=self.clear_all).pack(side=tk.LEFT, padx=8)
         ttk.Button(row, text="清空日志", command=self.log_frame.clear).pack(side=tk.RIGHT)
 
         self.log_frame.pack(fill=tk.BOTH, expand=True)
 
     def _add_rule_label(self, master, text: str, row: int, column: int) -> None:
         label = ttk.Label(master, text=text)
-        label.grid(row=row, column=column, sticky=tk.W, pady=(0 if row == 0 else 6, 0))
+        label.grid(row=row, column=column, sticky=tk.W, pady=(0 if row == 0 else 4, 0))
         self.manual_widgets.append(label)
 
     def _build_file_panel(self, master, title: str, file_command, folder_command):
-        frame = ttk.LabelFrame(master, text=title, style="Card.TLabelframe", padding=8)
-        frame.pack(side=tk.LEFT, fill=tk.BOTH, expand=True, padx=5)
-        listbox = tk.Listbox(frame, height=6, exportselection=False)
+        frame = ttk.LabelFrame(master, text=title, style="Card.TLabelframe", padding=6)
+        frame.pack(side=tk.LEFT, fill=tk.BOTH, expand=True, padx=4)
+        listbox = tk.Listbox(frame, height=3, exportselection=False)
         listbox.pack(fill=tk.BOTH, expand=True)
         button_row = ttk.Frame(frame)
-        button_row.pack(anchor=tk.W, pady=4)
+        button_row.pack(anchor=tk.W, pady=3)
         file_button = ttk.Button(button_row, text="+ 选择文件", command=file_command)
         file_button.pack(side=tk.LEFT)
         folder_button = ttk.Button(button_row, text="📁 扫描文件夹", command=folder_command)
-        folder_button.pack(side=tk.LEFT, padx=6)
+        folder_button.pack(side=tk.LEFT, padx=4)
         if not self.a_widgets:
             self.a_widgets.extend([listbox, file_button, folder_button])
         return listbox

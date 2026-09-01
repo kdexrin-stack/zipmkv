@@ -36,19 +36,19 @@ class FeatureFrame(ToolFrame):
         self.toggle_format()
 
     def _build(self) -> None:
-        file_frame = ttk.LabelFrame(self, text="Step 1 · 📁 输入 XML 弹幕", style="Card.TLabelframe", padding=12)
-        file_frame.pack(fill=tk.BOTH, expand=False, pady=(4, 6))
+        file_frame = ttk.LabelFrame(self, text="Step 1 · 📁 输入 XML 弹幕", style="Card.TLabelframe", padding=8)
+        file_frame.pack(fill=tk.BOTH, expand=False, pady=(2, 4))
         file_buttons = ttk.Frame(file_frame)
         file_buttons.pack(anchor=tk.W, pady=(0, 4))
         ttk.Button(file_buttons, text="+ 选择 XML 文件", command=self.choose_files).pack(side=tk.LEFT)
         ttk.Button(file_buttons, text="📁 扫描文件夹", command=self.choose_folder).pack(side=tk.LEFT, padx=6)
-        ttk.Button(file_buttons, text="清空列表", command=self.clear_files).pack(side=tk.LEFT)
-        self.listbox = tk.Listbox(file_frame, height=5, exportselection=False)
-        self.listbox.pack(fill=tk.BOTH, expand=True, pady=4)
+        ttk.Button(file_buttons, text="清空", command=self.clear_files).pack(side=tk.LEFT)
+        self.listbox = tk.Listbox(file_frame, height=4, exportselection=False)
+        self.listbox.pack(fill=tk.BOTH, expand=True, pady=2)
         bind_listbox_delete_menu(self.listbox, self.delete_selected, self.clear_files)
 
-        option_frame = ttk.LabelFrame(self, text="Step 2 · ⚙️ 处理与转换设置", style="Card.TLabelframe", padding=12)
-        option_frame.pack(fill=tk.X, pady=(2, 6))
+        option_frame = ttk.LabelFrame(self, text="Step 2 · ⚙️ 处理与转换设置", style="Card.TLabelframe", padding=8)
+        option_frame.pack(fill=tk.X, pady=(2, 4))
         
         fmt_row = ttk.Frame(option_frame)
         fmt_row.pack(anchor=tk.W, pady=(0, 4))

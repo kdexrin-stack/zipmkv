@@ -128,36 +128,37 @@ class FeatureFrame(ToolFrame):
 
     def _build_style_tab(self) -> None:
         body = self._create_scroll_body(self.style_tab)
-        ttk.Label(body, text="选择目标字幕或视频，可按示例样式对齐，也可使用手动参数覆盖。", style="Muted.TLabel").pack(anchor=tk.W)
 
-        file_frame = ttk.LabelFrame(body, text="1. 输入与输出", padding=8)
-        file_frame.pack(fill=tk.X, pady=8)
+        file_frame = ttk.LabelFrame(body, text="Step 1 · 📁 输入目标与示例", style="Card.TLabelframe", padding=6)
+        file_frame.pack(fill=tk.X, pady=(2, 4))
         file_frame.columnconfigure(1, weight=1)
 
         target_buttons = ttk.Frame(file_frame)
-        target_buttons.grid(row=0, column=0, columnspan=3, sticky=tk.W, pady=4)
-        ttk.Label(target_buttons, text="目标").pack(side=tk.LEFT)
-        ttk.Button(target_buttons, text="选择单/多个", command=self.choose_targets).pack(side=tk.LEFT, padx=5)
-        ttk.Button(target_buttons, text="选择文件夹", command=self.choose_target_folder).pack(side=tk.LEFT)
-        self.target_list = tk.Listbox(file_frame, height=4, exportselection=False)
-        self.target_list.grid(row=1, column=0, columnspan=3, sticky=tk.EW, pady=4)
+        target_buttons.grid(row=0, column=0, columnspan=3, sticky=tk.W, pady=2)
+        ttk.Label(target_buttons, text="目标字幕/视频").pack(side=tk.LEFT)
+        ttk.Button(target_buttons, text="+ 选择文件", command=self.choose_targets).pack(side=tk.LEFT, padx=4)
+        ttk.Button(target_buttons, text="📁 文件夹", command=self.choose_target_folder).pack(side=tk.LEFT)
+        ttk.Button(target_buttons, text="清空", command=self.clear_targets).pack(side=tk.LEFT, padx=4)
+        self.target_list = tk.Listbox(file_frame, height=2, exportselection=False)
+        self.target_list.grid(row=1, column=0, columnspan=3, sticky=tk.EW, pady=2)
         bind_listbox_delete_menu(self.target_list, self.delete_selected_targets, self.clear_targets)
 
         sample_buttons = ttk.Frame(file_frame)
-        sample_buttons.grid(row=2, column=0, columnspan=3, sticky=tk.W, pady=4)
-        ttk.Label(sample_buttons, text="示例").pack(side=tk.LEFT)
-        ttk.Button(sample_buttons, text="选择单/多个", command=self.choose_samples).pack(side=tk.LEFT, padx=5)
-        ttk.Button(sample_buttons, text="选择文件夹", command=self.choose_sample_folder).pack(side=tk.LEFT)
-        self.sample_list = tk.Listbox(file_frame, height=4, exportselection=False)
-        self.sample_list.grid(row=3, column=0, columnspan=3, sticky=tk.EW, pady=4)
+        sample_buttons.grid(row=2, column=0, columnspan=3, sticky=tk.W, pady=2)
+        ttk.Label(sample_buttons, text="示例样式源").pack(side=tk.LEFT)
+        ttk.Button(sample_buttons, text="+ 选择示例", command=self.choose_samples).pack(side=tk.LEFT, padx=4)
+        ttk.Button(sample_buttons, text="📁 文件夹", command=self.choose_sample_folder).pack(side=tk.LEFT)
+        ttk.Button(sample_buttons, text="清空", command=self.clear_samples).pack(side=tk.LEFT, padx=4)
+        self.sample_list = tk.Listbox(file_frame, height=2, exportselection=False)
+        self.sample_list.grid(row=3, column=0, columnspan=3, sticky=tk.EW, pady=2)
         bind_listbox_delete_menu(self.sample_list, self.delete_selected_samples, self.clear_samples)
 
-        ttk.Label(file_frame, text="输出目录").grid(row=4, column=0, sticky=tk.W, pady=4)
-        ttk.Entry(file_frame, textvariable=self.output_var).grid(row=4, column=1, sticky=tk.EW, padx=5)
-        ttk.Button(file_frame, text="选择", command=self.choose_output).grid(row=4, column=2)
+        ttk.Label(file_frame, text="输出目录").grid(row=4, column=0, sticky=tk.W, pady=2)
+        ttk.Entry(file_frame, textvariable=self.output_var).grid(row=4, column=1, sticky=tk.EW, padx=4)
+        ttk.Button(file_frame, text="浏览", command=self.choose_output).grid(row=4, column=2)
 
-        option_frame = ttk.LabelFrame(body, text="2. 样式来源与输出", padding=8)
-        option_frame.pack(fill=tk.X, pady=6)
+        option_frame = ttk.LabelFrame(body, text="Step 2 · ⚙️ 样式来源与转换规则", style="Card.TLabelframe", padding=6)
+        option_frame.pack(fill=tk.X, pady=(2, 4))
         ttk.Radiobutton(
             option_frame,
             text="手动参数",

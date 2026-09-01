@@ -12,9 +12,9 @@ from .theme import BASE_FONT_SIZE, COLORS, FONT_FAMILY, configure_listbox
 
 
 class LogFrame(ttk.Frame):
-    def __init__(self, master):
+    def __init__(self, master, height: int = 5):
         super().__init__(master, style="Surface.TFrame")
-        self.text = scrolledtext.ScrolledText(self, height=11, wrap=tk.WORD)
+        self.text = scrolledtext.ScrolledText(self, height=height, wrap=tk.WORD)
         self.text.configure(
             bg=COLORS["console"],
             fg=COLORS["console_text"],
@@ -27,8 +27,8 @@ class LogFrame(ttk.Frame):
             highlightbackground=COLORS["console_border"],
             highlightcolor=COLORS["primary"],
             font=(FONT_FAMILY, BASE_FONT_SIZE),
-            padx=12,
-            pady=10,
+            padx=10,
+            pady=8,
         )
         self.text.pack(fill=tk.BOTH, expand=True)
         self._pending: queue.Queue[str] = queue.Queue()
@@ -169,8 +169,8 @@ class ToolFrame(ttk.Frame):
     description = ""
 
     def __init__(self, master):
-        super().__init__(master, padding=(20, 16), style="Workspace.TFrame")
-        self.log_frame = LogFrame(self)
+        super().__init__(master, padding=(14, 10), style="Workspace.TFrame")
+        self.log_frame = LogFrame(self, height=5)
         self.last_output_dir: Path | None = None
         self._ui_pending: queue.Queue[object] = queue.Queue()
         self._ui_after_id: str | None = self.after(30, self._drain_ui_pending)

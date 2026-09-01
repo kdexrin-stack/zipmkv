@@ -44,48 +44,50 @@ class FeatureFrame(ToolFrame):
         top = ttk.Frame(self)
         top.pack(fill=tk.BOTH, expand=False, pady=(6, 8))
 
-        left = ttk.LabelFrame(top, text="Step 1 · 📁 输入素材列表", style="Card.TLabelframe", padding=12)
+        left = ttk.LabelFrame(top, text="Step 1 · 📁 输入素材列表", style="Card.TLabelframe", padding=8)
         left.pack(side=tk.LEFT, fill=tk.BOTH, expand=True, padx=(0, 10))
         buttons = ttk.Frame(left)
-        buttons.pack(anchor=tk.W, pady=(0, 6))
-        ttk.Button(buttons, text="+ 选择素材文件", command=self.choose_files).pack(side=tk.LEFT)
+        buttons.pack(anchor=tk.W, pady=(0, 4))
+        ttk.Button(buttons, text="+ 选择文件", command=self.choose_files).pack(side=tk.LEFT)
         ttk.Button(buttons, text="📁 扫描文件夹", command=self.choose_folder).pack(side=tk.LEFT, padx=6)
-        ttk.Button(buttons, text="清空列表", command=self.clear_items).pack(side=tk.LEFT)
-        self.listbox = tk.Listbox(left, height=7, exportselection=False)
-        self.listbox.pack(fill=tk.BOTH, expand=True, pady=4)
+        ttk.Button(buttons, text="清空", command=self.clear_items).pack(side=tk.LEFT)
+        self.listbox = tk.Listbox(left, height=4, exportselection=False)
+        self.listbox.pack(fill=tk.BOTH, expand=True, pady=2)
         bind_listbox_delete_menu(self.listbox, self.delete_selected, self.clear_items)
-        ttk.Label(left, textvariable=self.selection_summary_var, style="Badge.TLabel").pack(anchor=tk.W, pady=(4, 0))
+        ttk.Label(left, textvariable=self.selection_summary_var, style="Badge.TLabel").pack(anchor=tk.W, pady=(2, 0))
 
-        form = ttk.LabelFrame(top, text="Step 2 · ⚙️ 整理与输出设置", style="Card.TLabelframe", padding=12)
+        form = ttk.LabelFrame(top, text="Step 2 · ⚙️ 整理与输出设置", style="Card.TLabelframe", padding=8)
         form.pack(side=tk.RIGHT, fill=tk.BOTH, padx=(0, 0))
-        ttk.Label(form, text="输出目录").grid(row=0, column=0, sticky=tk.W, pady=4)
-        ttk.Entry(form, textvariable=self.output_var, width=34).grid(row=0, column=1, padx=6, sticky=tk.EW)
-        ttk.Button(form, text="浏览", command=self.choose_output).grid(row=0, column=2)
+        ttk.Label(form, text="输出目录").grid(row=0, column=0, sticky=tk.W, pady=2)
+        ttk.Entry(form, textvariable=self.output_var, width=28).grid(row=0, column=1, columnspan=2, padx=4, sticky=tk.EW)
+        ttk.Button(form, text="浏览", command=self.choose_output).grid(row=0, column=3, padx=(2, 0))
         
-        ttk.Label(form, text="输出格式").grid(row=1, column=0, sticky=tk.W, pady=4)
+        ttk.Label(form, text="输出格式").grid(row=1, column=0, sticky=tk.W, pady=2)
         ttk.Combobox(
             form,
             textvariable=self.output_format_var,
             values=["pdf", "epub"],
             state="readonly",
-            width=10,
-        ).grid(row=1, column=1, sticky=tk.W, padx=6)
-        ttk.Checkbutton(form, text="合并为一个大文件", variable=self.merge_var).grid(row=2, column=0, columnspan=2, sticky=tk.W, pady=4)
-        ttk.Label(form, text="合并文件名").grid(row=3, column=0, sticky=tk.W, pady=4)
-        ttk.Entry(form, textvariable=self.output_name_var, width=34).grid(row=3, column=1, padx=6, sticky=tk.EW)
-        ttk.Label(form, text="文字繁简").grid(row=4, column=0, sticky=tk.W, pady=4)
+            width=8,
+        ).grid(row=1, column=1, sticky=tk.W, padx=4)
+        ttk.Label(form, text="文字繁简").grid(row=1, column=2, sticky=tk.W, padx=(8, 2))
         ttk.Combobox(
             form,
             textvariable=self.text_conversion_var,
             values=[mode.label for mode in MODES],
             state="readonly",
-            width=18,
-        ).grid(row=4, column=1, sticky=tk.W, padx=6)
-        ttk.Label(form, text="解压密码").grid(row=5, column=0, sticky=tk.W, pady=4)
-        ttk.Entry(form, textvariable=self.password_var, show="*").grid(row=5, column=1, sticky=tk.EW, padx=6)
+            width=12,
+        ).grid(row=1, column=3, sticky=tk.W, padx=2)
+
+        ttk.Checkbutton(form, text="合并大文件", variable=self.merge_var).grid(row=2, column=0, columnspan=2, sticky=tk.W, pady=2)
+        ttk.Label(form, text="合并名称").grid(row=2, column=2, sticky=tk.W, padx=(8, 2))
+        ttk.Entry(form, textvariable=self.output_name_var, width=14).grid(row=2, column=3, padx=2, sticky=tk.EW)
+
+        ttk.Label(form, text="解压密码").grid(row=3, column=0, sticky=tk.W, pady=2)
+        ttk.Entry(form, textvariable=self.password_var, show="*", width=12).grid(row=3, column=1, sticky=tk.W, padx=4)
 
         self.tool_selector = ArchiveToolSelector(self)
-        self.tool_selector.pack(fill=tk.X, pady=(2, 6))
+        self.tool_selector.pack(fill=tk.X, pady=(2, 4))
 
         button_row = ttk.Frame(self)
         button_row.pack(fill=tk.X, pady=(6, 8))

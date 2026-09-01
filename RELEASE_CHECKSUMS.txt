@@ -1,4 +1,4 @@
 zipmkv 1.2.0 release artifacts
 
-075bfde0a4905e8c58b2ff756ad7953657076afb7cf2dc0a1a19222e93d43135  zipmkv.exe
+abb4fecc21363dff6632c9ad40edd41524a954b01858e9487e7813ae3ece3dd4  zipmkv.exe
 

@@ -13,6 +13,7 @@ if str(PROJECT_ROOT) not in sys.path:
 
 from common.paths import ensure_runtime_dirs
 from common.theme import COLORS, FONT_FAMILY, apply_app_theme, enable_high_dpi_awareness
+from common.haruhi_theme import HARUHI_THEME
 from features import FEATURES, FeatureSpec
 
 APP_VERSION = "1.2.0"
@@ -22,9 +23,9 @@ class ZipMkvApp(tk.Tk):
     def __init__(self):
         enable_high_dpi_awareness()
         super().__init__()
-        self.title("zipmkv 工具箱")
-        self.geometry("1360x840")
-        self.minsize(1080, 680)
+        self.title("zipmkv 工具箱 · SOS团特别版")
+        self.geometry("1240x760")
+        self.minsize(1020, 640)
         ensure_runtime_dirs()
         apply_app_theme(self)
         self.configure(bg=COLORS["bg"])
@@ -33,6 +34,7 @@ class ZipMkvApp(tk.Tk):
         self.feature_iids: dict[str, str] = {}
         self.feature_by_iid: dict[str, FeatureSpec] = {}
         self.category_var = tk.StringVar()
+        self.haruhi_btn_text = tk.StringVar(value="🌸 凉宫春日背景: 开启")
         self.module_index_var = tk.StringVar()
         self.status_var = tk.StringVar(value="就绪")
         self._build()
@@ -135,25 +137,26 @@ class ZipMkvApp(tk.Tk):
         self.feature_tree.bind("<<TreeviewSelect>>", self.on_select)
 
         sidebar_footer = ttk.Frame(sidebar, style="Sidebar.TFrame")
-        sidebar_footer.pack(side=tk.BOTTOM, fill=tk.X, pady=(16, 0))
-        ttk.Separator(sidebar_footer).pack(fill=tk.X, pady=(0, 12))
+        sidebar_footer.pack(side=tk.BOTTOM, fill=tk.X, pady=(12, 0))
+        ttk.Separator(sidebar_footer).pack(fill=tk.X, pady=(0, 8))
+        ttk.Button(sidebar_footer, textvariable=self.haruhi_btn_text, command=self.toggle_haruhi_bg, style="Sidebar.TButton").pack(fill=tk.X, pady=(0, 4))
         ttk.Button(sidebar_footer, text="打开运行目录", command=self.open_runtime_dir, style="Sidebar.TButton").pack(fill=tk.X)
-        ttk.Button(sidebar_footer, text="扩展模块指南", command=self.show_extension_help, style="Sidebar.TButton").pack(fill=tk.X, pady=(6, 0))
-        ttk.Label(sidebar_footer, text="安全离线 · 本地私有运行", style="SidebarMuted.TLabel").pack(anchor=tk.W, pady=(12, 0))
+        ttk.Button(sidebar_footer, text="扩展模块指南", command=self.show_extension_help, style="Sidebar.TButton").pack(fill=tk.X, pady=(4, 0))
+        ttk.Label(sidebar_footer, text="SOS团 · 本地私有安全运行", style="SidebarMuted.TLabel").pack(anchor=tk.W, pady=(8, 0))
 
-        content_shell = ttk.Frame(root, padding=(20, 18), style="App.TFrame")
+        content_shell = ttk.Frame(root, padding=(16, 12), style="App.TFrame")
         content_shell.pack(side=tk.RIGHT, fill=tk.BOTH, expand=True)
 
-        self.header = ttk.Frame(content_shell, style="Header.TFrame", padding=(16, 12))
-        self.header.pack(fill=tk.X, pady=(0, 12))
-        tk.Frame(self.header, width=4, bg=COLORS["primary"]).pack(side=tk.LEFT, fill=tk.Y, padx=(0, 14))
+        self.header = ttk.Frame(content_shell, style="Header.TFrame", padding=(14, 8))
+        self.header.pack(fill=tk.X, pady=(0, 8))
+        tk.Frame(self.header, width=4, bg=COLORS["primary"]).pack(side=tk.LEFT, fill=tk.Y, padx=(0, 12))
         header_text = ttk.Frame(self.header, style="Header.TFrame")
         header_text.pack(side=tk.LEFT, fill=tk.X, expand=True)
         self.page_title_var = tk.StringVar()
         self.page_desc_var = tk.StringVar()
         ttk.Label(header_text, textvariable=self.category_var, style="Eyebrow.TLabel").pack(anchor=tk.W)
         ttk.Label(header_text, textvariable=self.page_title_var, style="PageTitle.TLabel").pack(anchor=tk.W, pady=(1, 0))
-        ttk.Label(header_text, textvariable=self.page_desc_var, style="Muted.TLabel").pack(anchor=tk.W, pady=(3, 0))
+        ttk.Label(header_text, textvariable=self.page_desc_var, style="Muted.TLabel").pack(anchor=tk.W, pady=(2, 0))
         
         index_badge = tk.Label(
             self.header,
@@ -167,8 +170,8 @@ class ZipMkvApp(tk.Tk):
         )
         index_badge.pack(side=tk.RIGHT, anchor=tk.NE)
 
-        status = ttk.Frame(content_shell, style="Status.TFrame", padding=(14, 8))
-        status.pack(side=tk.BOTTOM, fill=tk.X, pady=(10, 0))
+        status = ttk.Frame(content_shell, style="Status.TFrame", padding=(12, 6))
+        status.pack(side=tk.BOTTOM, fill=tk.X, pady=(6, 0))
         tk.Frame(status, width=8, height=8, bg=COLORS["success"]).pack(side=tk.LEFT, padx=(0, 8))
         ttk.Label(status, textvariable=self.status_var, style="Status.TLabel").pack(side=tk.LEFT)
         ttk.Label(status, text="本地无损处理 · 源文件受保护", style="Status.TLabel").pack(side=tk.RIGHT)
@@ -193,6 +196,11 @@ class ZipMkvApp(tk.Tk):
             xscrollcommand=self.content_hscroll.set,
         )
         self.content_window: int | None = None
+
+    def toggle_haruhi_bg(self) -> None:
+        state = HARUHI_THEME.toggle()
+        self.haruhi_btn_text.set(f"🌸 凉宫春日背景: {'开启' if state else '关闭'}")
+        self._layout_content_window()
 
     def on_select(self, event=None) -> None:
         selection = self.feature_tree.selection()
@@ -253,6 +261,15 @@ class ZipMkvApp(tk.Tk):
         height = max(self.content_canvas.winfo_height(), self.current_frame.winfo_reqheight())
         self.content_canvas.itemconfigure(self.content_window, height=height)
         self._sync_content_scrollregion()
+        self._render_background_watermark(width, height)
+
+    def _render_background_watermark(self, width: int, height: int) -> None:
+        self.content_canvas.delete("haruhi_bg")
+        bg_img = HARUHI_THEME.get_watermark_image(width, height)
+        if bg_img:
+            self.content_canvas.create_image(0, 0, image=bg_img, anchor=tk.NW, tags=("haruhi_bg",))
+            if self.content_window:
+                self.content_canvas.tag_lower("haruhi_bg", self.content_window)
 
     def open_runtime_dir(self) -> None:
         root = ensure_runtime_dirs()["root"]

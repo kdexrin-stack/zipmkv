@@ -185,6 +185,8 @@ def build_exe() -> Path:
         str(VENDOR_7ZIP) + ";vendor/tools/7zip",
         "--add-data",
         str(VENDOR_FFMPEG_ARCHIVE) + ";vendor/tools/ffmpeg",
+        "--add-data",
+        str(ROOT / "assets") + ";assets",
         str(ROOT / "app.py"),
     ]
     run(args)
