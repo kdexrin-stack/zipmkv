@@ -34,7 +34,7 @@ class ZipMkvApp(tk.Tk):
         self.feature_iids: dict[str, str] = {}
         self.feature_by_iid: dict[str, FeatureSpec] = {}
         self.category_var = tk.StringVar()
-        self.haruhi_btn_text = tk.StringVar(value="🌸 凉宫春日背景: 开启")
+        self.haruhi_btn_text = tk.StringVar(value=f"🌸 凉宫春日立绘: {HARUHI_THEME.status_label}")
         self.module_index_var = tk.StringVar()
         self.status_var = tk.StringVar(value="就绪")
         self._build()
@@ -139,7 +139,8 @@ class ZipMkvApp(tk.Tk):
         sidebar_footer = ttk.Frame(sidebar, style="Sidebar.TFrame")
         sidebar_footer.pack(side=tk.BOTTOM, fill=tk.X, pady=(12, 0))
         ttk.Separator(sidebar_footer).pack(fill=tk.X, pady=(0, 8))
-        ttk.Button(sidebar_footer, textvariable=self.haruhi_btn_text, command=self.toggle_haruhi_bg, style="Sidebar.TButton").pack(fill=tk.X, pady=(0, 4))
+        ttk.Button(sidebar_footer, textvariable=self.haruhi_btn_text, command=self.cycle_haruhi_opacity, style="Sidebar.TButton").pack(fill=tk.X, pady=(0, 4))
+        ttk.Button(sidebar_footer, text="🖼️ 自定义春日图片", command=self.choose_custom_haruhi_image, style="Sidebar.TButton").pack(fill=tk.X, pady=(0, 4))
         ttk.Button(sidebar_footer, text="打开运行目录", command=self.open_runtime_dir, style="Sidebar.TButton").pack(fill=tk.X)
         ttk.Button(sidebar_footer, text="扩展模块指南", command=self.show_extension_help, style="Sidebar.TButton").pack(fill=tk.X, pady=(4, 0))
         ttk.Label(sidebar_footer, text="SOS团 · 本地私有安全运行", style="SidebarMuted.TLabel").pack(anchor=tk.W, pady=(8, 0))
@@ -197,10 +198,42 @@ class ZipMkvApp(tk.Tk):
         )
         self.content_window: int | None = None
 
-    def toggle_haruhi_bg(self) -> None:
-        state = HARUHI_THEME.toggle()
-        self.haruhi_btn_text.set(f"🌸 凉宫春日背景: {'开启' if state else '关闭'}")
-        self._layout_content_window()
+        self.haruhi_watermark_label = tk.Label(self.content, bg=COLORS["surface"], bd=0, cursor="hand2")
+        self.haruhi_watermark_label.bind("<Button-1>", lambda _e: self.cycle_haruhi_opacity())
+
+    def cycle_haruhi_opacity(self) -> None:
+        HARUHI_THEME.cycle_opacity()
+        self.haruhi_btn_text.set(f"🌸 凉宫春日立绘: {HARUHI_THEME.status_label}")
+        self._update_haruhi_watermark()
+
+    def choose_custom_haruhi_image(self) -> None:
+        path = filedialog.askopenfilename(
+            title="选择自定义背景/立绘图片",
+            filetypes=[("图片文件", "*.png *.jpg *.jpeg *.webp *.bmp"), ("所有文件", "*.*")],
+        )
+        if path:
+            HARUHI_THEME.set_custom_image(Path(path))
+            self.haruhi_btn_text.set(f"🌸 凉宫春日立绘: {HARUHI_THEME.status_label}")
+            self._update_haruhi_watermark()
+
+    def _update_haruhi_watermark(self) -> None:
+        if not hasattr(self, "haruhi_watermark_label"):
+            return
+        if not HARUHI_THEME.enabled:
+            self.haruhi_watermark_label.place_forget()
+            return
+        h = self.content.winfo_height()
+        if h < 100:
+            h = 500
+        target_height = max(180, min(380, int(h * 0.52)))
+        img = HARUHI_THEME.get_blended_figure(target_height, COLORS["surface"])
+        if img:
+            self.haruhi_watermark_label.configure(image=img)
+            self.haruhi_watermark_label.image = img
+            self.haruhi_watermark_label.place(relx=1.0, rely=1.0, anchor="se", x=-16, y=-16)
+            self.haruhi_watermark_label.lift()
+        else:
+            self.haruhi_watermark_label.place_forget()
 
     def on_select(self, event=None) -> None:
         selection = self.feature_tree.selection()
@@ -261,7 +294,7 @@ class ZipMkvApp(tk.Tk):
         height = max(self.content_canvas.winfo_height(), self.current_frame.winfo_reqheight())
         self.content_canvas.itemconfigure(self.content_window, height=height)
         self._sync_content_scrollregion()
-        self._render_background_watermark(width, height)
+        self._update_haruhi_watermark()
 
     def _render_background_watermark(self, width: int, height: int) -> None:
         self.content_canvas.delete("haruhi_bg")

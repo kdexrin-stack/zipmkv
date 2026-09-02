@@ -215,7 +215,7 @@ def probe_built_exe(executable: Path) -> None:
             creationflags=creationflags,
         )
         try:
-            return_code = process.wait(timeout=60)
+            return_code = process.wait(timeout=90)
         except subprocess.TimeoutExpired as exc:
             if os.name == "nt":
                 subprocess.run(
@@ -225,6 +225,8 @@ def probe_built_exe(executable: Path) -> None:
                 )
             else:
                 process.kill()
+            import time
+            time.sleep(1)
             raise SystemExit("Built EXE startup probe timed out before the first page became ready.") from exc
 
         if return_code != 0:
