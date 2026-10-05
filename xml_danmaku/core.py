@@ -7,6 +7,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from common.log import Logger, emit
+from common.text_utils import unique_path
 from common.zhconv import convert_chinese_text
 
 
@@ -168,44 +169,39 @@ def process_line(line: str, options: DanmakuOptions, stats: DanmakuStats) -> str
 
 
 def parse_danmaku_items(source: Path, options: DanmakuOptions, stats: DanmakuStats) -> list[DanmakuItem]:
-    lines = source.read_text(encoding="utf-8", errors="replace").splitlines()
     items: list[DanmakuItem] = []
-    
     danmaku_tag = re.compile(r'<d\s+p="([^"]+)">([^<]*)</d>')
-    for line in lines:
-        match = danmaku_tag.search(line)
-        if not match:
-            continue
-        p_str, text_raw = match.group(1), match.group(2)
-        params = p_str.split(",")
-        if len(params) < 4:
-            continue
-        try:
-            t = float(params[0])
-            mode = int(params[1])
-            size = int(params[2])
-            color = int(params[3])
-        except ValueError:
-            continue
-        
-        if options.adjust_enabled:
-            t += options.offset_seconds
+    with source.open("r", encoding="utf-8", errors="replace") as handle:
+        for line in handle:
+            match = danmaku_tag.search(line)
+            if not match:
+                continue
+            p_str, text_raw = match.group(1), match.group(2)
+            params = p_str.split(",")
+            if len(params) < 4:
+                continue
+            try:
+                t = float(params[0])
+                mode = int(params[1])
+                size = int(params[2])
+                color = int(params[3])
+            except ValueError:
+                continue
             
-        if options.delete_negative and t < 0:
-            stats.deleted += 1
-            continue
-            
-        text = html.unescape(text_raw)
-        if options.strip_ass_tags:
-            text, _ = remove_ass_tags(text)
-            stats.stripped += 1
-        if options.text_conversion_mode != "none":
-            text = convert_chinese_text(text, options.text_conversion_mode)
-            
-        if not text.strip():
-            continue
-            
-        items.append(DanmakuItem(time=t, mode=mode, size=size, color=color, text=text))
+            if options.adjust_enabled:
+                t += options.offset_seconds
+            if options.delete_negative and t < 0:
+                stats.deleted += 1
+                continue
+            text = html.unescape(text_raw)
+            if options.strip_ass_tags:
+                text, _ = remove_ass_tags(text)
+                stats.stripped += 1
+            if options.text_conversion_mode != "none":
+                text = convert_chinese_text(text, options.text_conversion_mode)
+            if not text.strip():
+                continue
+            items.append(DanmakuItem(time=t, mode=mode, size=size, color=color, text=text))
         
     items.sort(key=lambda x: x.time)
     return items
@@ -331,7 +327,7 @@ def process_xml_file(path: str | Path, options: DanmakuOptions) -> tuple[Path, D
     if fmt == "ass":
         output_dir = source.parent / "弹幕转字幕输出"
         output_dir.mkdir(parents=True, exist_ok=True)
-        output = output_dir / f"{source.stem}.ass"
+        output = unique_path(output_dir / f"{source.stem}.ass")
         items = parse_danmaku_items(source, options, stats)
         ass_content = convert_items_to_ass(items, options)
         output.write_text(ass_content, encoding="utf-8")
@@ -341,7 +337,7 @@ def process_xml_file(path: str | Path, options: DanmakuOptions) -> tuple[Path, D
     if fmt == "srt":
         output_dir = source.parent / "弹幕转字幕输出"
         output_dir.mkdir(parents=True, exist_ok=True)
-        output = output_dir / f"{source.stem}.srt"
+        output = unique_path(output_dir / f"{source.stem}.srt")
         items = parse_danmaku_items(source, options, stats)
         srt_content = convert_items_to_srt(items, options)
         output.write_text(srt_content, encoding="utf-8")
@@ -350,11 +346,10 @@ def process_xml_file(path: str | Path, options: DanmakuOptions) -> tuple[Path, D
         
     output_dir = source.parent / options.output_dir_name
     output_dir.mkdir(parents=True, exist_ok=True)
-    output = output_dir / source.name
+    output = unique_path(output_dir / source.name)
 
-    lines = source.read_text(encoding="utf-8", errors="replace").splitlines(keepends=True)
-    with output.open("w", encoding="utf-8", newline="") as handle:
-        for line in lines:
+    with source.open("r", encoding="utf-8", errors="replace") as in_f, output.open("w", encoding="utf-8", newline="") as handle:
+        for line in in_f:
             processed = process_line(line, options, stats)
             if processed is not None:
                 handle.write(processed)

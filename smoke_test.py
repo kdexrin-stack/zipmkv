@@ -19,6 +19,7 @@ from common.paths import ensure_runtime_dirs
 from common.zhconv import convert_chinese_text, convert_text_file
 from image_archive_pdf.core import convert_folder_items_to_pdf, convert_mixed_items, save_text_to_pdf
 from rename_files.core import ManualRenameRule, build_manual_pairs, build_pairs, copy_by_pairs, format_manual_name
+from rename_files.gui import FeatureFrame as RenameFeatureFrame
 from subtitles.core import StyleOptions, modify_subtitle_or_video
 from subtitles.core import modify_many
 from subtitles.core import mux_subtitles_into_videos, remove_subtitle_tracks_from_videos
@@ -191,6 +192,73 @@ def smoke_rename_files(base: Path) -> None:
     custom_rule = ManualRenameRule(number_style="自定义模板", custom_template="EP{num:03d}")
     if format_manual_name(4, custom_rule) != "EP005":
         raise AssertionError("custom rename template failed")
+
+
+def smoke_rename_gui(base: Path) -> None:
+    source = base / "rename_gui"
+    source.mkdir(parents=True, exist_ok=True)
+    f1 = source / "raw1.mkv"
+    f2 = source / "raw2.mkv"
+    f1.write_text("v1", encoding="utf-8")
+    f2.write_text("v2", encoding="utf-8")
+
+    root = tk.Tk()
+    root.withdraw()
+    try:
+        frame = RenameFeatureFrame(root)
+        frame.b_collection.add_files([f1, f2])
+        frame.refresh_lists()
+
+        # 1. Test manual mode with copy
+        frame.mode_var.set("manual")
+        frame.prefix_var.set("Anime_")
+        frame.number_style_var.set("01")
+        frame.suffix_var.set("_HD")
+        frame.action_mode_var.set("copy")
+        out_dir = source / "copy_out"
+        frame.output_var.set(str(out_dir))
+
+        pairs = frame.current_pairs()
+        if len(pairs) != 2:
+            raise AssertionError(f"expected 2 pairs, got {len(pairs)}")
+        if pairs[0].new_path.name != "Anime_01_HD.mkv":
+            raise AssertionError(f"unexpected new name: {pairs[0].new_path.name}")
+
+        frame.run_background = lambda _btn, job, output_dir=None: job()
+        frame.start(frame.start_button)
+        if not (out_dir / "Anime_01_HD.mkv").exists() or not (out_dir / "Anime_02_HD.mkv").exists():
+            raise AssertionError("copy output files not found")
+        if not f1.exists() or not f2.exists():
+            raise AssertionError("source files should not have been modified in copy mode")
+
+        # 2. Test reference mode with in-place rename
+        ref1 = source / "Ref_01.txt"
+        ref2 = source / "Ref_02.txt"
+        ref1.write_text("r1", encoding="utf-8")
+        ref2.write_text("r2", encoding="utf-8")
+        frame.a_collection.add_files([ref1, ref2])
+        frame.mode_var.set("reference")
+        frame.action_mode_var.set("rename")
+        frame.refresh_lists()
+
+        ref_pairs = frame.current_pairs()
+        if ref_pairs[0].new_path.name != "Ref_01.mkv":
+            raise AssertionError(f"unexpected ref name: {ref_pairs[0].new_path.name}")
+
+        import tkinter.messagebox as mb
+        old_askyesno = mb.askyesno
+        mb.askyesno = lambda *args, **kwargs: True
+        try:
+            frame.start(frame.start_button)
+        finally:
+            mb.askyesno = old_askyesno
+
+        if not (source / "Ref_01.mkv").exists() or not (source / "Ref_02.mkv").exists():
+            raise AssertionError("in-place renamed files not found")
+        if f1.exists() or f2.exists():
+            raise AssertionError("original files should have been renamed in in-place mode")
+    finally:
+        root.destroy()
 
 
 def smoke_xml_danmaku(base: Path) -> None:
@@ -420,7 +488,7 @@ def smoke_subtitle_workspace_independence(base: Path) -> None:
             raise AssertionError("clearing style targets changed video sources")
 
         captured: dict[str, object] = {}
-        frame.run_background = lambda _button, job: job()
+        frame.run_background = lambda _button, job, output_dir=None: job()
         frame._add_target_subtitles_job = lambda sources, videos, output, replace: captured.update(
             action="add",
             sources=sources,
@@ -459,6 +527,7 @@ def main() -> None:
         ("繁简文字转换", smoke_zh_convert),
         ("多压缩包转 PDF", smoke_batch_archive_pdf),
         ("批量文件重命名", smoke_rename_files),
+        ("批量重命名界面与双模式", smoke_rename_gui),
         ("XML 弹幕批量处理", smoke_xml_danmaku),
         ("字幕样式修改", smoke_subtitles),
         ("视频轨道页面独立选择", smoke_subtitle_workspace_independence),

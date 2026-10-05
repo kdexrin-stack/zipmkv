@@ -1,26 +1,25 @@
 from __future__ import annotations
 
-import tkinter as tk
-from tkinter import filedialog, messagebox, ttk
 from pathlib import Path
+import tkinter as tk
+from tkinter import messagebox, ttk
 
-from common.file_selection import collect_files_from_inputs
-from common.gui_base import ToolFrame, bind_listbox_delete_menu
-from common.zhconv import MODES, mode_key_from_label, mode_label
+from common.file_selection import InputFileCollection, resolve_input_snapshot
+from common.gui_base import FileListCard, ToolFrame
+from common.zhconv import MODES, mode_key_from_label
 
 from .core import DanmakuOptions, process_xml_files
 
 
+XML_FILETYPES = [("XML 弹幕文件", "*.xml"), ("所有文件", "*.*")]
+
+
 class FeatureFrame(ToolFrame):
     title = "XML 弹幕批量处理"
-    description = "批量处理 B 站 XML 弹幕：删除负时间、整体平移、清理 ASS 样式标签。"
+    description = "批量处理 B 站 XML 弹幕：转 ASS 滚动字幕/SRT、删除负时间、整体平移、清理 ASS 样式标签。"
 
     def __init__(self, master):
         super().__init__(master)
-        self.files: list[str] = []
-        self.folders: list[str] = []
-        self.excluded_paths: set[str] = set()
-        self.display_items: list[tuple[str, str]] = []
         self.delete_var = tk.BooleanVar(value=True)
         self.strip_var = tk.BooleanVar(value=False)
         self.adjust_var = tk.BooleanVar(value=False)
@@ -36,16 +35,17 @@ class FeatureFrame(ToolFrame):
         self.toggle_format()
 
     def _build(self) -> None:
-        file_frame = ttk.LabelFrame(self, text="Step 1 · 📁 输入 XML 弹幕", style="Card.TLabelframe", padding=8)
-        file_frame.pack(fill=tk.BOTH, expand=False, pady=(2, 4))
-        file_buttons = ttk.Frame(file_frame)
-        file_buttons.pack(anchor=tk.W, pady=(0, 4))
-        ttk.Button(file_buttons, text="+ 选择 XML 文件", command=self.choose_files).pack(side=tk.LEFT)
-        ttk.Button(file_buttons, text="📁 扫描文件夹", command=self.choose_folder).pack(side=tk.LEFT, padx=6)
-        ttk.Button(file_buttons, text="清空", command=self.clear_files).pack(side=tk.LEFT)
-        self.listbox = tk.Listbox(file_frame, height=4, exportselection=False)
-        self.listbox.pack(fill=tk.BOTH, expand=True, pady=2)
-        bind_listbox_delete_menu(self.listbox, self.delete_selected, self.clear_files)
+        self.collection = InputFileCollection(allowed_extensions={".xml"})
+        self.file_card = FileListCard(
+            self,
+            title="Step 1 · 📁 输入 XML 弹幕",
+            collection=self.collection,
+            filetypes=XML_FILETYPES,
+            file_dialog_title="选择 XML 弹幕文件",
+            height=4,
+            padding=8,
+        )
+        self.file_card.pack(fill=tk.BOTH, expand=False, pady=(2, 4))
 
         option_frame = ttk.LabelFrame(self, text="Step 2 · ⚙️ 处理与转换设置", style="Card.TLabelframe", padding=8)
         option_frame.pack(fill=tk.X, pady=(2, 4))
@@ -112,98 +112,51 @@ class FeatureFrame(ToolFrame):
 
         self.log_frame.pack(fill=tk.BOTH, expand=True)
 
-    def choose_files(self) -> None:
-        paths = filedialog.askopenfilenames(title="选择 XML 文件", filetypes=[("XML 文件", "*.xml"), ("所有文件", "*.*")])
-        if paths:
-            self.files.extend(list(paths))
-            self.refresh_list()
-
-    def choose_folder(self) -> None:
-        path = filedialog.askdirectory(title="选择包含 XML 的文件夹")
-        if path:
-            self.folders.append(path)
-            self.refresh_list()
-
-    def refresh_list(self) -> None:
-        self.display_items = []
-        self.listbox.delete(0, tk.END)
-        for path in self.current_files():
-            self.display_items.append(("file", str(path)))
-            self.listbox.insert(tk.END, str(path))
-        for folder in self.folders:
-            self.display_items.append(("folder", folder))
-            self.listbox.insert(tk.END, f"[文件夹] {folder}")
-
-    def current_files(self):
-        files = collect_files_from_inputs(self.files, self.folders, extensions={".xml"})
-        return [path for path in files if str(path.resolve()).casefold() not in self.excluded_paths]
-
-    def delete_selected(self) -> None:
-        for index in sorted(self.listbox.curselection(), reverse=True):
-            if index >= len(self.display_items):
-                continue
-            kind, value = self.display_items[index]
-            if kind == "folder":
-                self.folders = [item for item in self.folders if item != value]
-            else:
-                self.files = [item for item in self.files if item != value]
-                self.excluded_paths.add(str(Path(value).resolve()).casefold())
-        self.refresh_list()
-
-    def clear_files(self) -> None:
-        self.files = []
-        self.folders = []
-        self.excluded_paths.clear()
-        self.refresh_list()
+    def toggle_format(self) -> None:
+        is_sub = "字幕" in self.output_format_var.get()
+        state = tk.NORMAL if is_sub else tk.DISABLED
+        self.scroll_spin.configure(state=state)
+        self.font_size_spin.configure(state=state)
 
     def toggle_adjust(self) -> None:
         state = tk.NORMAL if self.adjust_var.get() else tk.DISABLED
-        for widget in (self.hour_spin, self.minute_spin, self.second_spin, self.ahead_radio, self.delay_radio):
-            widget.config(state=state)
+        for w in (self.hour_spin, self.minute_spin, self.second_spin, self.ahead_radio, self.delay_radio):
+            w.configure(state=state)
 
-    def toggle_format(self) -> None:
-        raw_fmt = self.output_format_var.get()
-        state = tk.NORMAL if "ASS" in raw_fmt else tk.DISABLED
-        for widget in (self.scroll_spin, self.font_size_spin):
-            widget.config(state=state)
+    def calculate_offset(self) -> float:
+        total = self.hour_var.get() * 3600 + self.minute_var.get() * 60 + self.second_var.get()
+        return -float(total) if self.direction_var.get() == "ahead" else float(total)
 
     def start(self, button: tk.Widget) -> None:
-        targets = self.current_files()
-        if not targets:
-            messagebox.showwarning("未选择文件", "请先选择 XML 文件。")
+        snapshot = self.collection.snapshot()
+        if not snapshot.has_inputs:
+            self.log_frame.write("请先添加需要处理的 XML 弹幕文件。")
             return
 
-        seconds = self.hour_var.get() * 3600 + self.minute_var.get() * 60 + self.second_var.get()
-        if self.direction_var.get() == "ahead":
-            seconds = -seconds
-        raw_fmt = self.output_format_var.get()
-        if "ASS" in raw_fmt:
-            out_fmt = "ass"
-        elif "SRT" in raw_fmt:
-            out_fmt = "srt"
-        else:
-            out_fmt = "xml"
+        fmt_raw = self.output_format_var.get()
+        out_fmt = "ass" if "ASS" in fmt_raw else "srt" if "SRT" in fmt_raw else "xml"
 
         options = DanmakuOptions(
             delete_negative=self.delete_var.get(),
             adjust_enabled=self.adjust_var.get(),
-            offset_seconds=seconds,
+            offset_seconds=self.calculate_offset(),
             strip_ass_tags=self.strip_var.get(),
             output_format=out_fmt,
-            scroll_duration=max(3.0, float(self.scroll_dur_var.get())),
-            font_size=max(12, int(self.font_size_var.get())),
+            scroll_duration=self.scroll_dur_var.get(),
+            font_size=self.font_size_var.get(),
             text_conversion_mode=mode_key_from_label(self.text_conversion_var.get()),
         )
 
-        def job() -> None:
-            conversion_mode = mode_key_from_label(self.text_conversion_var.get())
-            if conversion_mode != "none":
-                self.log_frame.write(f"文字繁简转换：{mode_label(conversion_mode)}。")
-            count = process_xml_files(targets, options, self.log_frame.write)
-            self.log_frame.write(f"完成，共处理 {count} 个文件。")
-            if targets:
-                sub_folder = "弹幕转字幕" if out_fmt in ("ass", "srt") else "修改后的弹幕"
-                self.last_output_dir = targets[0].parent / sub_folder
+        def job() -> str:
+            files = resolve_input_snapshot(snapshot, extensions={".xml"})
+            if not files:
+                raise RuntimeError("所选输入中没有找到 XML 弹幕文件。")
+            processed = process_xml_files(files, options, log=self.log_frame.write)
+            self.log_frame.write(f"处理完成，共处理 {processed} 个文件。")
+            if files:
+                out_dir_name = "弹幕转字幕输出" if out_fmt in ("ass", "srt") else "已修改的弹幕"
+                self.last_output_dir = files[0].parent / out_dir_name
+            return f"处理完成，共处理 {processed} 个文件"
 
-        out_target = targets[0].parent if targets else None
-        self.run_background(button, job, output_dir=out_target)
+        out_folder = snapshot.files[0].parent / ("弹幕转字幕输出" if out_fmt in ("ass", "srt") else "已修改的弹幕") if snapshot.files else snapshot.folders[0]
+        self.run_background(button, job, output_dir=out_folder)

@@ -180,9 +180,15 @@ def probe_subtitle_streams(video_path: str | Path, ffprobe_path: str | Path | No
         str(video_path),
     ])
     if result.returncode != 0:
-        raise RuntimeError(result.stderr.strip() or "读取字幕轨道失败")
-    payload = json.loads(result.stdout or "{}")
-    return payload.get("streams", [])
+        return _probe_with_ffmpeg(video_path)
+    try:
+        payload = json.loads(result.stdout or "{}")
+        streams = payload.get("streams", [])
+        return streams if isinstance(streams, list) else []
+    except (json.JSONDecodeError, TypeError, ValueError):
+        # Some third-party ffprobe builds return text despite -of json. Keep
+        # the bundled FFmpeg fallback available for those builds.
+        return _probe_with_ffmpeg(video_path)
 
 
 def _probe_audio_with_ffmpeg(video_path: str | Path) -> list[dict]:
@@ -233,5 +239,9 @@ def probe_audio_streams(video_path: str | Path, ffprobe_path: str | Path | None 
     ])
     if result.returncode != 0:
         return _probe_audio_with_ffmpeg(video_path)
-    payload = json.loads(result.stdout or "{}")
-    return payload.get("streams", [])
+    try:
+        payload = json.loads(result.stdout or "{}")
+        streams = payload.get("streams", [])
+        return streams if isinstance(streams, list) else []
+    except (json.JSONDecodeError, TypeError, ValueError):
+        return _probe_audio_with_ffmpeg(video_path)

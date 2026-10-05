@@ -10,11 +10,15 @@ from pathlib import Path
 from random import choice
 
 from PIL import Image, ImageFile, ImageSequence
-from reportlab.lib.pagesizes import A4
-from reportlab.lib.utils import ImageReader
-from reportlab.pdfbase import pdfmetrics
-from reportlab.pdfbase.cidfonts import UnicodeCIDFont
-from reportlab.pdfgen import canvas
+
+
+def _reportlab():
+    from reportlab.lib.pagesizes import A4
+    from reportlab.lib.utils import ImageReader
+    from reportlab.pdfbase import pdfmetrics
+    from reportlab.pdfbase.cidfonts import UnicodeCIDFont
+    from reportlab.pdfgen import canvas
+    return A4, ImageReader, pdfmetrics, UnicodeCIDFont, canvas
 
 from common.archive_tools import ArchiveTool, extract_archive, is_archive
 from common.log import Logger, emit
@@ -25,6 +29,7 @@ from common.zhconv import convert_chinese_text
 ImageFile.LOAD_TRUNCATED_IMAGES = True
 
 IMAGE_EXTENSIONS = {".jpg", ".jpeg", ".png", ".gif", ".bmp", ".tif", ".tiff", ".webp"}
+LOSSLESS_PDF_IMAGE_EXTENSIONS = {".jpg", ".jpeg", ".jp2", ".j2k", ".png", ".tif", ".tiff"}
 PDF_EXTENSIONS = {".pdf"}
 TEXT_EXTENSIONS = {".txt"}
 HTML_EXTENSIONS = {".html", ".htm", ".xhtml"}
@@ -116,7 +121,8 @@ def extract_pdf_text(path: str | Path) -> str:
     return "\n\n".join(parts)
 
 
-def _append_image_to_pdf(pdf: canvas.Canvas, path: Path, log: Logger | None = None) -> int:
+def _append_image_to_pdf(pdf: object, path: Path, log: Logger | None = None) -> int:
+    _, ImageReader, _, _, _ = _reportlab()
     try:
         with Image.open(path) as img:
             if path.suffix.casefold() == ".gif":
@@ -250,13 +256,27 @@ def save_image_paths_to_pdf(image_paths: list[str | Path], pdf_path: str | Path,
     if not image_paths:
         raise ValueError("没有可写入 PDF 的图片。")
 
+    paths = [Path(path) for path in image_paths]
     output = Path(pdf_path)
     output.parent.mkdir(parents=True, exist_ok=True)
+
+    # img2pdf embeds common JPEG/PNG/TIFF data without re-encoding pixels.
+    # Keep the ReportLab path for animated or less common formats.
+    if all(path.suffix.casefold() in LOSSLESS_PDF_IMAGE_EXTENSIONS for path in paths):
+        try:
+            import img2pdf
+
+            output.write_bytes(img2pdf.convert([str(path) for path in paths]))
+            return len(paths)
+        except Exception as exc:
+            emit(log, f"无损图片直写失败，改用兼容模式: {exc}")
+
+    _, _, _, _, canvas = _reportlab()
     pdf = canvas.Canvas(str(output))
     page_count = 0
     try:
-        for image_path in image_paths:
-            page_count += _append_image_to_pdf(pdf, Path(image_path), log)
+        for image_path in paths:
+            page_count += _append_image_to_pdf(pdf, image_path, log)
     finally:
         pdf.save()
     if page_count <= 0:
@@ -267,6 +287,7 @@ def save_image_paths_to_pdf(image_paths: list[str | Path], pdf_path: str | Path,
 def _wrap_text_line(text: str, font_name: str, font_size: int, max_width: float) -> list[str]:
     if not text:
         return [""]
+    _, _, pdfmetrics, _, _ = _reportlab()
     lines: list[str] = []
     current = ""
     for char in text:
@@ -282,6 +303,7 @@ def _wrap_text_line(text: str, font_name: str, font_size: int, max_width: float)
 
 
 def save_text_to_pdf(text: str, pdf_path: str | Path, title: str = "文本", log: Logger | None = None) -> int:
+    A4, _, pdfmetrics, UnicodeCIDFont, canvas = _reportlab()
     output = Path(pdf_path)
     output.parent.mkdir(parents=True, exist_ok=True)
     try:

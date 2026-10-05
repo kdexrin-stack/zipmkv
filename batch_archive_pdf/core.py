@@ -31,9 +31,10 @@ def convert_archives_to_pdf(
     for index, archive in enumerate(natural_sorted(archives), 1):
         emit(log, f"[{index}/{len(archives)}] 处理压缩包: {archive.name}")
         temp_dir = Path(tempfile.mkdtemp(prefix="zipmkv_batch_"))
+        nested_temps: list[Path] = []
         try:
             extract_archive(archive, temp_dir, password=password, tool=archive_tool, log=log)
-            image_paths, temp_dirs = collect_image_paths(temp_dir, password=password, archive_tool=archive_tool, log=log)
+            image_paths, nested_temps = collect_image_paths(temp_dir, password=password, archive_tool=archive_tool, log=log)
             if not image_paths:
                 emit(log, f"未找到有效图片: {archive.name}")
                 continue
@@ -44,11 +45,11 @@ def convert_archives_to_pdf(
             emit(log, f"生成 PDF: {pdf_path}，页数 {page_count}")
             if preview_callback and image_paths:
                 preview_callback(Path(choice(image_paths)), pdf_path)
-            for nested_temp in temp_dirs:
-                shutil.rmtree(nested_temp, ignore_errors=True)
         except Exception as exc:
             emit(log, f"处理失败: {archive.name} - {exc}")
         finally:
+            for nested_temp in nested_temps:
+                shutil.rmtree(nested_temp, ignore_errors=True)
             shutil.rmtree(temp_dir, ignore_errors=True)
 
     return generated

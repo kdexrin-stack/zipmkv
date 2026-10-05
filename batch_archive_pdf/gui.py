@@ -1,14 +1,20 @@
 from __future__ import annotations
 
-import tkinter as tk
 from pathlib import Path
+import tkinter as tk
 from tkinter import filedialog, ttk
 from PIL import Image, ImageTk
 
-from common.file_selection import collect_files_from_inputs
-from common.gui_base import ArchiveToolSelector, ToolFrame, bind_listbox_delete_menu
+from common.file_selection import InputFileCollection, resolve_input_snapshot
+from common.gui_base import ArchiveToolSelector, FileListCard, ToolFrame
 
 from .core import convert_archives_to_pdf
+
+
+ARCHIVE_FILETYPES = [
+    ("压缩包/电子书", "*.zip *.rar *.7z *.cbz *.cbr *.cb7 *.epub *.tar *.gz *.tgz"),
+    ("所有文件", "*.*"),
+]
 
 
 class FeatureFrame(ToolFrame):
@@ -17,10 +23,6 @@ class FeatureFrame(ToolFrame):
 
     def __init__(self, master):
         super().__init__(master)
-        self.archive_paths: list[str] = []
-        self.folder_paths: list[str] = []
-        self.excluded_paths: set[str] = set()
-        self.display_items: list[tuple[str, str]] = []
         self.output_var = tk.StringVar()
         self.password_var = tk.StringVar()
         self.preview_image = None
@@ -31,16 +33,17 @@ class FeatureFrame(ToolFrame):
         top = ttk.Frame(self)
         top.pack(fill=tk.BOTH, expand=False, pady=(6, 8))
 
-        left = ttk.LabelFrame(top, text="Step 1 · 📁 输入压缩包列表", style="Card.TLabelframe", padding=8)
-        left.pack(side=tk.LEFT, fill=tk.BOTH, expand=True, padx=(0, 10))
-        file_buttons = ttk.Frame(left)
-        file_buttons.pack(anchor=tk.W, pady=(0, 4))
-        ttk.Button(file_buttons, text="+ 选择压缩包", command=self.choose_archives).pack(side=tk.LEFT)
-        ttk.Button(file_buttons, text="📁 扫描文件夹", command=self.choose_folder).pack(side=tk.LEFT, padx=6)
-        ttk.Button(file_buttons, text="清空", command=self.clear_archives).pack(side=tk.LEFT)
-        self.listbox = tk.Listbox(left, height=4, exportselection=False)
-        self.listbox.pack(fill=tk.BOTH, expand=True, pady=2)
-        bind_listbox_delete_menu(self.listbox, self.delete_selected, self.clear_archives)
+        self.collection = InputFileCollection(include_archives=True)
+        self.file_card = FileListCard(
+            top,
+            title="Step 1 · 📁 输入压缩包列表",
+            collection=self.collection,
+            filetypes=ARCHIVE_FILETYPES,
+            file_dialog_title="选择压缩包",
+            height=4,
+            padding=8,
+        )
+        self.file_card.pack(side=tk.LEFT, fill=tk.BOTH, expand=True, padx=(0, 10))
 
         form = ttk.LabelFrame(top, text="Step 2 · ⚙️ 转换设置", style="Card.TLabelframe", padding=8)
         form.pack(side=tk.RIGHT, fill=tk.BOTH, padx=(0, 0))
@@ -70,59 +73,19 @@ class FeatureFrame(ToolFrame):
         self.preview_label.pack(fill=tk.BOTH, expand=True)
         ttk.Label(preview, textvariable=self.preview_var, wraplength=220, style="Muted.TLabel").pack(fill=tk.X, pady=(4, 0))
 
-    def choose_archives(self) -> None:
-        paths = filedialog.askopenfilenames(
-            title="选择压缩包",
-            filetypes=[("压缩包/电子书", "*.zip *.rar *.7z *.cbz *.cbr *.cb7 *.epub *.tar *.gz *.tgz"), ("所有文件", "*.*")],
-        )
-        if paths:
-            self.archive_paths.extend(list(paths))
-            self.refresh_list()
-
-    def choose_folder(self) -> None:
-        path = filedialog.askdirectory(title="选择包含压缩包的文件夹")
-        if path:
-            self.folder_paths.append(path)
-            self.refresh_list()
-
     def choose_output(self) -> None:
         path = filedialog.askdirectory(title="选择 PDF 输出目录")
         if path:
             self.output_var.set(path)
 
-    def clear_archives(self) -> None:
-        self.archive_paths = []
-        self.folder_paths = []
-        self.excluded_paths.clear()
-        self.refresh_list()
-
-    def current_archives(self):
-        files = collect_files_from_inputs(self.archive_paths, self.folder_paths, include_archives=True)
-        return [path for path in files if str(path.resolve()).casefold() not in self.excluded_paths]
-
-    def delete_selected(self) -> None:
-        for index in sorted(self.listbox.curselection(), reverse=True):
-            if index >= len(self.display_items):
-                continue
-            kind, value = self.display_items[index]
-            if kind == "folder":
-                self.folder_paths = [item for item in self.folder_paths if item != value]
-            else:
-                self.archive_paths = [item for item in self.archive_paths if item != value]
-                self.excluded_paths.add(str(Path(value).resolve()).casefold())
-        self.refresh_list()
-
-    def refresh_list(self) -> None:
-        self.display_items = []
-        self.listbox.delete(0, tk.END)
-        for path in self.current_archives():
-            self.display_items.append(("file", str(path)))
-            self.listbox.insert(tk.END, str(path))
-        for folder in self.folder_paths:
-            self.display_items.append(("folder", folder))
-            self.listbox.insert(tk.END, f"[文件夹] {folder}")
-
     def start(self, button: tk.Widget) -> None:
+        snapshot = self.collection.snapshot()
+        if not snapshot.has_inputs:
+            self.log_frame.write("请先添加需要转换的压缩包。")
+            return
+        output_dir = self.output_var.get().strip() or None
+        password = self.password_var.get() or None
+
         def show_preview(image_path: Path, pdf_path: Path) -> None:
             def update() -> None:
                 try:
@@ -134,20 +97,24 @@ class FeatureFrame(ToolFrame):
                 except Exception as exc:
                     self.preview_var.set(f"预览失败: {exc}")
 
-            self.after(0, update)
+            self.call_in_ui(update)
 
-        def job() -> None:
+        def job() -> str:
+            archives = resolve_input_snapshot(snapshot, include_archives=True)
+            if not archives:
+                raise RuntimeError("所选输入中没有可处理的压缩包。")
             generated = convert_archives_to_pdf(
-                self.current_archives(),
-                output_dir=self.output_var.get() or None,
-                password=self.password_var.get() or None,
+                archives,
+                output_dir=output_dir,
+                password=password,
                 archive_tool=self.tool_selector.selected_tool(),
                 log=self.log_frame.write,
                 preview_callback=show_preview,
             )
-            self.log_frame.write(f"完成，共生成 {len(generated)} 个 PDF。")
+            self.log_frame.write(f"完成，共转换 {len(generated)} 个压缩包。")
             if generated:
                 self.last_output_dir = Path(generated[0]).parent
+            return f"完成，共转换 {len(generated)} 个压缩包"
 
-        out_target = self.output_var.get() or (self.current_archives()[0].parent if self.current_archives() else None)
+        out_target = output_dir or (snapshot.files[0].parent if snapshot.files else snapshot.folders[0])
         self.run_background(button, job, output_dir=out_target)

@@ -5,7 +5,7 @@ import os
 import sys
 import tkinter as tk
 from pathlib import Path
-from tkinter import messagebox, ttk
+from tkinter import filedialog, messagebox, ttk
 
 PROJECT_ROOT = Path(__file__).resolve().parent
 if str(PROJECT_ROOT) not in sys.path:
@@ -16,7 +16,7 @@ from common.theme import COLORS, FONT_FAMILY, apply_app_theme, enable_high_dpi_a
 from common.haruhi_theme import HARUHI_THEME
 from features import FEATURES, FeatureSpec
 
-APP_VERSION = "1.2.0"
+APP_VERSION = "1.2.1"
 
 
 class ZipMkvApp(tk.Tk):
@@ -29,6 +29,7 @@ class ZipMkvApp(tk.Tk):
         ensure_runtime_dirs()
         apply_app_theme(self)
         self.configure(bg=COLORS["bg"])
+        self._loaded_frames: dict[str, ttk.Frame] = {}
         self.current_frame: ttk.Frame | None = None
         self.current_feature: FeatureSpec | None = None
         self.feature_iids: dict[str, str] = {}
@@ -175,7 +176,7 @@ class ZipMkvApp(tk.Tk):
         status.pack(side=tk.BOTTOM, fill=tk.X, pady=(6, 0))
         tk.Frame(status, width=8, height=8, bg=COLORS["success"]).pack(side=tk.LEFT, padx=(0, 8))
         ttk.Label(status, textvariable=self.status_var, style="Status.TLabel").pack(side=tk.LEFT)
-        ttk.Label(status, text="本地无损处理 · 源文件受保护", style="Status.TLabel").pack(side=tk.RIGHT)
+        ttk.Label(status, text="快捷键: Ctrl+Enter 执行 · Ctrl+E 输出 · Ctrl+L 清空日志", style="Status.TLabel").pack(side=tk.RIGHT)
 
         self.content = ttk.Frame(content_shell, padding=0, style="Workspace.TFrame")
         self.content.pack(fill=tk.BOTH, expand=True)
@@ -200,6 +201,45 @@ class ZipMkvApp(tk.Tk):
 
         self.haruhi_watermark_label = tk.Label(self.content, bg=COLORS["surface"], bd=0, cursor="hand2")
         self.haruhi_watermark_label.bind("<Button-1>", lambda _e: self.cycle_haruhi_opacity())
+        self.haruhi_watermark_label.bind(
+            "<Enter>",
+            lambda _e: self.status_var.set(f"🌸 凉宫春日立绘 ({HARUHI_THEME.status_label}) · 点击切换透明度 · 团长正在注视你的工作！"),
+        )
+        self.haruhi_watermark_label.bind(
+            "<Leave>",
+            lambda _e: self.status_var.set(f"{self.current_feature.title if self.current_feature else 'zipmkv'} · 就绪"),
+        )
+        self._haruhi_debounce_id: str | None = None
+
+        # Global shortcuts
+        self.bind_all("<Control-Return>", lambda _e: self._trigger_primary_action())
+        self.bind_all("<F5>", lambda _e: self._trigger_primary_action())
+        self.bind_all("<Control-e>", lambda _e: self._trigger_reveal_output())
+        self.bind_all("<Control-E>", lambda _e: self._trigger_reveal_output())
+        self.bind_all("<Control-l>", lambda _e: self._trigger_clear_log())
+        self.bind_all("<Control-L>", lambda _e: self._trigger_clear_log())
+
+    def _trigger_primary_action(self) -> None:
+        if not self.current_frame:
+            return
+        for attr in ("primary_action_button", "start_button"):
+            btn = getattr(self.current_frame, attr, None)
+            if btn and btn.cget("state") != tk.DISABLED:
+                btn.invoke()
+                return
+        for child in self.current_frame.winfo_children():
+            if isinstance(child, ttk.Button) and "Primary" in str(child.cget("style")):
+                if child.cget("state") != tk.DISABLED:
+                    child.invoke()
+                    return
+
+    def _trigger_reveal_output(self) -> None:
+        if self.current_frame and hasattr(self.current_frame, "reveal_output_folder"):
+            self.current_frame.reveal_output_folder()
+
+    def _trigger_clear_log(self) -> None:
+        if self.current_frame and hasattr(self.current_frame, "log_frame"):
+            self.current_frame.log_frame.clear()
 
     def cycle_haruhi_opacity(self) -> None:
         HARUHI_THEME.cycle_opacity()
@@ -219,13 +259,23 @@ class ZipMkvApp(tk.Tk):
     def _update_haruhi_watermark(self) -> None:
         if not hasattr(self, "haruhi_watermark_label"):
             return
+        if self._haruhi_debounce_id:
+            try:
+                self.after_cancel(self._haruhi_debounce_id)
+            except Exception:
+                pass
+        self._haruhi_debounce_id = self.after(80, self._render_haruhi_watermark_now)
+
+    def _render_haruhi_watermark_now(self) -> None:
+        self._haruhi_debounce_id = None
         if not HARUHI_THEME.enabled:
             self.haruhi_watermark_label.place_forget()
             return
         h = self.content.winfo_height()
         if h < 100:
             h = 500
-        target_height = max(180, min(380, int(h * 0.52)))
+        raw_height = max(180, min(380, int(h * 0.52)))
+        target_height = (raw_height // 30) * 30
         img = HARUHI_THEME.get_blended_figure(target_height, COLORS["surface"])
         if img:
             self.haruhi_watermark_label.configure(image=img)
@@ -249,16 +299,16 @@ class ZipMkvApp(tk.Tk):
     def load_feature(self, feature: FeatureSpec) -> None:
         if self.current_feature == feature and self.current_frame is not None:
             return
-        if self.current_frame:
-            self.current_frame.destroy()
-            self.current_frame = None
-        try:
-            module = importlib.import_module(feature.module)
-            frame_class = getattr(module, feature.frame_class)
-            frame = frame_class(self.content_canvas)
-        except Exception as exc:
-            messagebox.showerror("加载失败", f"{feature.title} 加载失败:\n{exc}")
-            return
+        frame = self._loaded_frames.get(feature.key)
+        if frame is None:
+            try:
+                module = importlib.import_module(feature.module)
+                frame_class = getattr(module, feature.frame_class)
+                frame = frame_class(self.content_canvas)
+                self._loaded_frames[feature.key] = frame
+            except Exception as exc:
+                messagebox.showerror("加载失败", f"{feature.title} 加载失败:\n{exc}")
+                return
         self.current_frame = frame
         self.current_feature = feature
         self.content_canvas.delete("all")
@@ -290,19 +340,14 @@ class ZipMkvApp(tk.Tk):
             return
         width = max(self.content_canvas.winfo_width(), 900)
         self.content_canvas.itemconfigure(self.content_window, width=width)
-        self.current_frame.update_idletasks()
         height = max(self.content_canvas.winfo_height(), self.current_frame.winfo_reqheight())
         self.content_canvas.itemconfigure(self.content_window, height=height)
         self._sync_content_scrollregion()
         self._update_haruhi_watermark()
 
     def _render_background_watermark(self, width: int, height: int) -> None:
-        self.content_canvas.delete("haruhi_bg")
-        bg_img = HARUHI_THEME.get_watermark_image(width, height)
-        if bg_img:
-            self.content_canvas.create_image(0, 0, image=bg_img, anchor=tk.NW, tags=("haruhi_bg",))
-            if self.content_window:
-                self.content_canvas.tag_lower("haruhi_bg", self.content_window)
+        """Compatibility hook retained for older callers."""
+        self._update_haruhi_watermark()
 
     def open_runtime_dir(self) -> None:
         root = ensure_runtime_dirs()["root"]

@@ -1,15 +1,26 @@
 from __future__ import annotations
 
-import tkinter as tk
 from pathlib import Path
+import tkinter as tk
 from tkinter import filedialog, ttk
-
 from PIL import Image, ImageTk
 
-from common.gui_base import ArchiveToolSelector, ToolFrame, bind_listbox_delete_menu
+from common.file_selection import resolve_input_snapshot
+from common.gui_base import ArchiveToolSelector, FileListCard, ToolFrame
 from common.zhconv import MODES, mode_key_from_label, mode_label
 
 from .core import convert_mixed_items
+
+
+MERGE_FILETYPES = [
+    (
+        "可整理素材",
+        "*.jpg *.jpeg *.png *.gif *.bmp *.tif *.tiff *.webp "
+        "*.zip *.rar *.7z *.cbz *.cbr *.cb7 *.epub *.pdf *.txt "
+        "*.tar *.gz *.tgz *.bz2 *.xz",
+    ),
+    ("所有文件", "*.*"),
+]
 
 
 class FeatureFrame(ToolFrame):
@@ -18,17 +29,12 @@ class FeatureFrame(ToolFrame):
 
     def __init__(self, master):
         super().__init__(master)
-        self.file_paths: list[str] = []
-        self.folder_paths: list[str] = []
-        self.excluded_paths: set[str] = set()
-        self.display_items: list[tuple[str, str]] = []
         self.output_var = tk.StringVar()
         self.output_name_var = tk.StringVar(value="合并整理")
         self.output_format_var = tk.StringVar(value="pdf")
         self.merge_var = tk.BooleanVar(value=True)
         self.password_var = tk.StringVar()
         self.text_conversion_var = tk.StringVar(value="不转换")
-        self.selection_summary_var = tk.StringVar(value="尚未选择输入")
         self.preview_image = None
         self.preview_var = tk.StringVar(value="尚未生成预览")
         self._build()
@@ -44,24 +50,22 @@ class FeatureFrame(ToolFrame):
         top = ttk.Frame(self)
         top.pack(fill=tk.BOTH, expand=False, pady=(6, 8))
 
-        left = ttk.LabelFrame(top, text="Step 1 · 📁 输入素材列表", style="Card.TLabelframe", padding=8)
-        left.pack(side=tk.LEFT, fill=tk.BOTH, expand=True, padx=(0, 10))
-        buttons = ttk.Frame(left)
-        buttons.pack(anchor=tk.W, pady=(0, 4))
-        ttk.Button(buttons, text="+ 选择文件", command=self.choose_files).pack(side=tk.LEFT)
-        ttk.Button(buttons, text="📁 扫描文件夹", command=self.choose_folder).pack(side=tk.LEFT, padx=6)
-        ttk.Button(buttons, text="清空", command=self.clear_items).pack(side=tk.LEFT)
-        self.listbox = tk.Listbox(left, height=4, exportselection=False)
-        self.listbox.pack(fill=tk.BOTH, expand=True, pady=2)
-        bind_listbox_delete_menu(self.listbox, self.delete_selected, self.clear_items)
-        ttk.Label(left, textvariable=self.selection_summary_var, style="Badge.TLabel").pack(anchor=tk.W, pady=(2, 0))
+        self.file_card = FileListCard(
+            top,
+            title="Step 1 · 📁 输入素材列表",
+            filetypes=MERGE_FILETYPES,
+            file_dialog_title="选择图片、压缩包、EPUB、PDF 或 TXT",
+            height=4,
+            padding=8,
+        )
+        self.file_card.pack(side=tk.LEFT, fill=tk.BOTH, expand=True, padx=(0, 10))
 
         form = ttk.LabelFrame(top, text="Step 2 · ⚙️ 整理与输出设置", style="Card.TLabelframe", padding=8)
         form.pack(side=tk.RIGHT, fill=tk.BOTH, padx=(0, 0))
         ttk.Label(form, text="输出目录").grid(row=0, column=0, sticky=tk.W, pady=2)
         ttk.Entry(form, textvariable=self.output_var, width=28).grid(row=0, column=1, columnspan=2, padx=4, sticky=tk.EW)
         ttk.Button(form, text="浏览", command=self.choose_output).grid(row=0, column=3, padx=(2, 0))
-        
+
         ttk.Label(form, text="输出格式").grid(row=1, column=0, sticky=tk.W, pady=2)
         ttk.Combobox(
             form,
@@ -106,97 +110,23 @@ class FeatureFrame(ToolFrame):
         self.preview_label.pack(fill=tk.BOTH, expand=True)
         ttk.Label(preview, textvariable=self.preview_var, wraplength=220, style="Muted.TLabel").pack(fill=tk.X, pady=(4, 0))
 
-    def choose_files(self) -> None:
-        paths = filedialog.askopenfilenames(
-            title="选择图片、压缩包、EPUB、PDF 或 TXT",
-            filetypes=[
-                (
-                    "可整理文件",
-                    "*.jpg *.jpeg *.png *.gif *.bmp *.tif *.tiff *.webp "
-                    "*.zip *.rar *.7z *.cbz *.cbr *.cb7 *.epub *.pdf *.txt "
-                    "*.tar *.gz *.tgz *.bz2 *.xz",
-                ),
-                ("所有文件", "*.*"),
-            ],
-        )
-        if paths:
-            self.file_paths.extend(list(paths))
-            self.refresh_list()
-
-    def choose_folder(self) -> None:
-        path = filedialog.askdirectory(title="选择包含图片/压缩包/EPUB/PDF/TXT 的文件夹")
-        if path:
-            self.folder_paths.append(path)
-            self.refresh_list()
-
     def choose_output(self) -> None:
-        path = filedialog.askdirectory(title="选择输出目录")
-        if path:
-            self.output_var.set(path)
-
-    def current_files(self) -> list[Path]:
-        files: list[Path] = []
-        seen: set[str] = set()
-        for item in self.file_paths:
-            path = Path(item)
-            if not path.is_file():
-                continue
-            key = str(path.resolve()).casefold()
-            if key in self.excluded_paths or key in seen:
-                continue
-            seen.add(key)
-            files.append(path)
-        return files
-
-    def current_folders(self) -> list[Path]:
-        folders: list[Path] = []
-        seen: set[str] = set()
-        for item in self.folder_paths:
-            path = Path(item)
-            if not path.is_dir():
-                continue
-            key = str(path.resolve()).casefold()
-            if key in self.excluded_paths or key in seen:
-                continue
-            seen.add(key)
-            folders.append(path)
-        return folders
-
-    def refresh_list(self) -> None:
-        self.display_items = []
-        self.listbox.delete(0, tk.END)
-        for path in self.current_files():
-            self.display_items.append(("file", str(path)))
-            self.listbox.insert(tk.END, str(path))
-        for folder in self.current_folders():
-            self.display_items.append(("folder", str(folder)))
-            self.listbox.insert(tk.END, f"[文件夹扫描] {folder}")
-        file_count = len([item for item in self.display_items if item[0] == "file"])
-        folder_count = len([item for item in self.display_items if item[0] == "folder"])
-        if file_count or folder_count:
-            self.selection_summary_var.set(f"已选择 {file_count} 个文件，{folder_count} 个文件夹。")
-        else:
-            self.selection_summary_var.set("尚未选择输入")
-
-    def clear_items(self) -> None:
-        self.file_paths = []
-        self.folder_paths = []
-        self.excluded_paths.clear()
-        self.refresh_list()
-
-    def delete_selected(self) -> None:
-        for index in sorted(self.listbox.curselection(), reverse=True):
-            if index >= len(self.display_items):
-                continue
-            kind, value = self.display_items[index]
-            if kind == "folder":
-                self.folder_paths = [item for item in self.folder_paths if item != value]
-            else:
-                self.file_paths = [item for item in self.file_paths if item != value]
-            self.excluded_paths.add(str(Path(value).resolve()).casefold())
-        self.refresh_list()
+        target = filedialog.askdirectory(title="选择输出目录")
+        if target:
+            self.output_var.set(target)
 
     def start(self, button: tk.Widget) -> None:
+        snapshot = self.file_card.collection.snapshot()
+        if not snapshot.has_inputs:
+            self.log_frame.write("请先添加需要整理的素材文件或扫描文件夹。")
+            return
+        output_dir = self.output_var.get().strip() or None
+        output_format = self.output_format_var.get()
+        merge_output = self.merge_var.get()
+        output_name = self.output_name_var.get()
+        password = self.password_var.get() or None
+        conversion_mode = mode_key_from_label(self.text_conversion_var.get())
+
         def show_preview(image_path: Path, pdf_path: Path) -> None:
             def update() -> None:
                 try:
@@ -210,19 +140,22 @@ class FeatureFrame(ToolFrame):
 
             self.call_in_ui(update)
 
-        def job() -> None:
-            conversion_mode = mode_key_from_label(self.text_conversion_var.get())
+        def job() -> str:
+            files = resolve_input_snapshot(snapshot)
+            folders = list(snapshot.folders)
+            if not files and not folders:
+                raise RuntimeError("所选输入中没有可整理的文件或文件夹。")
             if conversion_mode != "none":
                 self.log_frame.write(f"文字繁简转换：{mode_label(conversion_mode)}。PDF 原页面合并时保持原样。")
             generated = convert_mixed_items(
-                file_paths=self.current_files(),
-                folder_paths=self.current_folders(),
-                output_dir=self.output_var.get() or None,
-                password=self.password_var.get() or None,
+                file_paths=files,
+                folder_paths=folders,
+                output_dir=output_dir,
+                password=password,
                 archive_tool=self.tool_selector.selected_tool(),
-                output_format=self.output_format_var.get(),
-                merge_output=self.merge_var.get(),
-                output_name=self.output_name_var.get(),
+                output_format=output_format,
+                merge_output=merge_output,
+                output_name=output_name,
                 text_conversion_mode=conversion_mode,
                 log=self.log_frame.write,
                 preview_callback=show_preview,
@@ -230,6 +163,7 @@ class FeatureFrame(ToolFrame):
             self.log_frame.write(f"完成，共生成 {len(generated)} 个文件。")
             if generated:
                 self.last_output_dir = Path(generated[0]).parent
+            return f"完成，共生成 {len(generated)} 个文件"
 
-        out_target = self.output_var.get() or (self.current_files()[0].parent if self.current_files() else None)
+        out_target = output_dir or (snapshot.files[0].parent if snapshot.files else snapshot.folders[0])
         self.run_background(button, job, output_dir=out_target)

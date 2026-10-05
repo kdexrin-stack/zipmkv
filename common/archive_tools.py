@@ -155,7 +155,9 @@ def _extract_zip_builtin(archive_path: Path, output_dir: Path, password: str | N
         output_root = output_dir.resolve()
         for info in zf.infolist():
             target = (output_dir / info.filename).resolve()
-            if not str(target).casefold().startswith(str(output_root).casefold()):
+            try:
+                target.relative_to(output_root)
+            except ValueError:
                 raise RuntimeError(f"压缩包包含不安全路径: {info.filename}")
             zf.extract(info, output_dir, pwd=pwd)
 

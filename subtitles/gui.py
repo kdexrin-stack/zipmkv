@@ -6,7 +6,7 @@ from tkinter import colorchooser, filedialog, messagebox, ttk
 
 from PIL import Image, ImageTk
 
-from common.file_selection import collect_files_from_inputs
+from common.file_selection import InputFileCollection, resolve_input_snapshot
 from common.gui_base import LogFrame, ToolFrame, bind_listbox_delete_menu
 from common.media_tools import describe_ffmpeg, probe_stream_lines, probe_subtitle_streams
 from common.paths import ensure_runtime_dirs
@@ -40,26 +40,11 @@ class FeatureFrame(ToolFrame):
 
     def __init__(self, master):
         super().__init__(master)
-        self.target_files: list[str] = []
-        self.target_folders: list[str] = []
-        self.target_excluded: set[str] = set()
-        self.target_display_items: list[tuple[str, str]] = []
-        self.sample_files: list[str] = []
-        self.sample_folders: list[str] = []
-        self.sample_excluded: set[str] = set()
-        self.sample_display_items: list[tuple[str, str]] = []
-        self.video_source_files: list[str] = []
-        self.video_source_folders: list[str] = []
-        self.video_source_excluded: set[str] = set()
-        self.video_source_display_items: list[tuple[str, str]] = []
-        self.video_sample_files: list[str] = []
-        self.video_sample_folders: list[str] = []
-        self.video_sample_excluded: set[str] = set()
-        self.video_sample_display_items: list[tuple[str, str]] = []
-        self.mux_video_files: list[str] = []
-        self.mux_video_folders: list[str] = []
-        self.mux_video_excluded: set[str] = set()
-        self.mux_video_display_items: list[tuple[str, str]] = []
+        self.target_collection = InputFileCollection(TARGET_EXTENSIONS)
+        self.sample_collection = InputFileCollection(TARGET_EXTENSIONS)
+        self.video_source_collection = InputFileCollection(TARGET_EXTENSIONS)
+        self.video_sample_collection = InputFileCollection(TARGET_EXTENSIONS)
+        self.mux_video_collection = InputFileCollection(VIDEO_EXTENSIONS)
         self.output_var = tk.StringVar()
         self.video_output_var = tk.StringVar()
         self.output_format_var = tk.StringVar(value="same")
@@ -98,6 +83,96 @@ class FeatureFrame(ToolFrame):
         self.refresh_status()
         self.update_option_states()
         self.update_track_state()
+
+    @property
+    def target_files(self) -> list[str]:
+        return self.target_collection.files
+
+    @target_files.setter
+    def target_files(self, value: list[str]) -> None:
+        self.target_collection.files = list(value)
+        self.target_collection.refresh_display_items()
+
+    @property
+    def target_folders(self) -> list[str]:
+        return self.target_collection.folders
+
+    @target_folders.setter
+    def target_folders(self, value: list[str]) -> None:
+        self.target_collection.folders = list(value)
+        self.target_collection.refresh_display_items()
+
+    @property
+    def sample_files(self) -> list[str]:
+        return self.sample_collection.files
+
+    @sample_files.setter
+    def sample_files(self, value: list[str]) -> None:
+        self.sample_collection.files = list(value)
+        self.sample_collection.refresh_display_items()
+
+    @property
+    def sample_folders(self) -> list[str]:
+        return self.sample_collection.folders
+
+    @sample_folders.setter
+    def sample_folders(self, value: list[str]) -> None:
+        self.sample_collection.folders = list(value)
+        self.sample_collection.refresh_display_items()
+
+    @property
+    def video_source_files(self) -> list[str]:
+        return self.video_source_collection.files
+
+    @video_source_files.setter
+    def video_source_files(self, value: list[str]) -> None:
+        self.video_source_collection.files = list(value)
+        self.video_source_collection.refresh_display_items()
+
+    @property
+    def video_source_folders(self) -> list[str]:
+        return self.video_source_collection.folders
+
+    @video_source_folders.setter
+    def video_source_folders(self, value: list[str]) -> None:
+        self.video_source_collection.folders = list(value)
+        self.video_source_collection.refresh_display_items()
+
+    @property
+    def video_sample_files(self) -> list[str]:
+        return self.video_sample_collection.files
+
+    @video_sample_files.setter
+    def video_sample_files(self, value: list[str]) -> None:
+        self.video_sample_collection.files = list(value)
+        self.video_sample_collection.refresh_display_items()
+
+    @property
+    def video_sample_folders(self) -> list[str]:
+        return self.video_sample_collection.folders
+
+    @video_sample_folders.setter
+    def video_sample_folders(self, value: list[str]) -> None:
+        self.video_sample_collection.folders = list(value)
+        self.video_sample_collection.refresh_display_items()
+
+    @property
+    def mux_video_files(self) -> list[str]:
+        return self.mux_video_collection.files
+
+    @mux_video_files.setter
+    def mux_video_files(self, value: list[str]) -> None:
+        self.mux_video_collection.files = list(value)
+        self.mux_video_collection.refresh_display_items()
+
+    @property
+    def mux_video_folders(self) -> list[str]:
+        return self.mux_video_collection.folders
+
+    @mux_video_folders.setter
+    def mux_video_folders(self, value: list[str]) -> None:
+        self.mux_video_collection.folders = list(value)
+        self.mux_video_collection.refresh_display_items()
 
     def _build(self) -> None:
         paned = ttk.PanedWindow(self, orient=tk.VERTICAL)
@@ -490,57 +565,42 @@ class FeatureFrame(ToolFrame):
             self.status_var.set("未检测到 FFmpeg；仍可处理单独字幕文件，视频内封字幕需要 FFmpeg。")
 
     def _current_targets(self) -> list[Path]:
-        files = collect_files_from_inputs(self.target_files, self.target_folders, extensions=TARGET_EXTENSIONS)
-        return [path for path in files if str(path.resolve()).casefold() not in self.target_excluded]
+        return self.target_collection.resolve_files()
 
     def _current_samples(self) -> list[Path]:
-        files = collect_files_from_inputs(self.sample_files, self.sample_folders, extensions=TARGET_EXTENSIONS)
-        return [path for path in files if str(path.resolve()).casefold() not in self.sample_excluded]
+        return self.sample_collection.resolve_files()
 
     def _current_video_sources(self) -> list[Path]:
-        files = collect_files_from_inputs(
-            self.video_source_files,
-            self.video_source_folders,
-            extensions=TARGET_EXTENSIONS,
-        )
-        return [path for path in files if str(path.resolve()).casefold() not in self.video_source_excluded]
+        return self.video_source_collection.resolve_files()
 
     def _current_video_samples(self) -> list[Path]:
-        files = collect_files_from_inputs(
-            self.video_sample_files,
-            self.video_sample_folders,
-            extensions=TARGET_EXTENSIONS,
-        )
-        return [path for path in files if str(path.resolve()).casefold() not in self.video_sample_excluded]
+        return self.video_sample_collection.resolve_files()
+
+    def _current_mux_videos(self) -> list[Path]:
+        return self.mux_video_collection.resolve_files()
 
     def choose_targets(self) -> None:
         paths = filedialog.askopenfilenames(
             title="选择目标字幕或视频",
-            filetypes=[
-                ("字幕/视频", "*.ass *.ssa *.srt *.vtt *.skrt *.mkv *.mp4 *.mov *.avi *.wmv *.flv *.webm *.m4v"),
-                ("所有文件", "*.*"),
-            ],
+            filetypes=[("字幕/视频", "*.ass *.ssa *.srt *.vtt *.skrt *.mkv *.mp4 *.mov *.avi *.wmv *.flv *.webm *.m4v"), ("所有文件", "*.*")],
         )
         if paths:
-            self.target_files.extend(list(paths))
+            self.target_collection.add_files(list(paths))
             self.refresh_lists()
 
     def choose_target_folder(self) -> None:
         path = filedialog.askdirectory(title="选择包含目标字幕/视频的文件夹")
         if path:
-            self.target_folders.append(path)
+            self.target_collection.add_folder(path)
             self.refresh_lists()
 
     def choose_samples(self) -> None:
         paths = filedialog.askopenfilenames(
             title="选择示例字幕或视频",
-            filetypes=[
-                ("字幕/视频", "*.ass *.ssa *.srt *.vtt *.skrt *.mkv *.mp4 *.mov *.avi *.wmv *.flv *.webm *.m4v"),
-                ("所有文件", "*.*"),
-            ],
+            filetypes=[("字幕/视频", "*.ass *.ssa *.srt *.vtt *.skrt *.mkv *.mp4 *.mov *.avi *.wmv *.flv *.webm *.m4v"), ("所有文件", "*.*")],
         )
         if paths:
-            self.sample_files.extend(list(paths))
+            self.sample_collection.add_files(list(paths))
             if self.style_mode_var.get() == "manual":
                 self.style_mode_var.set("sample_manual" if self.has_manual_overrides() else "sample")
                 self.update_option_states()
@@ -549,145 +609,82 @@ class FeatureFrame(ToolFrame):
     def choose_sample_folder(self) -> None:
         path = filedialog.askdirectory(title="选择包含示例字幕/视频的文件夹")
         if path:
-            self.sample_folders.append(path)
+            self.sample_collection.add_folder(path)
             if self.style_mode_var.get() == "manual":
                 self.style_mode_var.set("sample_manual" if self.has_manual_overrides() else "sample")
                 self.update_option_states()
             self.refresh_lists()
 
     def refresh_lists(self) -> None:
-        target_paths = self._current_targets()
-        self.target_display_items = []
         self.target_list.delete(0, tk.END)
-        for path in target_paths:
-            self.target_display_items.append(("file", str(path)))
-            self.target_list.insert(tk.END, str(path))
-        for folder in self.target_folders:
-            self.target_display_items.append(("folder", folder))
-            self.target_list.insert(tk.END, f"[文件夹] {folder}")
+        for text, _ in self.target_collection.display_items:
+            self.target_list.insert(tk.END, text)
 
-        sample_paths = self._current_samples()
-        self.sample_display_items = []
         self.sample_list.delete(0, tk.END)
-        for index, path in enumerate(sample_paths, 1):
-            self.sample_display_items.append(("file", str(path)))
-            self.sample_list.insert(tk.END, f"{index}. {path.suffix.lower()} | {path}")
-        for folder in self.sample_folders:
-            self.sample_display_items.append(("folder", folder))
-            self.sample_list.insert(tk.END, f"[示例文件夹] {folder}")
+        for text, _ in self.sample_collection.display_items:
+            self.sample_list.insert(tk.END, text)
 
-        video_sources = self._current_video_sources()
-        self.video_source_display_items = []
         self.video_source_list.delete(0, tk.END)
-        for path in video_sources:
-            self.video_source_display_items.append(("file", str(path)))
-            self.video_source_list.insert(tk.END, str(path))
-        for folder in self.video_source_folders:
-            self.video_source_display_items.append(("folder", folder))
-            self.video_source_list.insert(tk.END, f"[字幕来源文件夹] {folder}")
+        for text, _ in self.video_source_collection.display_items:
+            self.video_source_list.insert(tk.END, text)
+        video_sources = self.video_source_collection.direct_files()
+        video_source_folders = self.video_source_collection.visible_folders()
         subtitle_count = sum(1 for path in video_sources if is_subtitle(path))
         video_count = sum(1 for path in video_sources if is_video(path))
-        if video_sources:
-            self.video_source_var.set(f"已选 {len(video_sources)} 个（字幕 {subtitle_count} / 视频 {video_count}）")
+        if video_sources or video_source_folders:
+            detail = f"直接文件 {len(video_sources)} 个（字幕 {subtitle_count} / 视频 {video_count}）"
+            if video_source_folders:
+                detail += f" + 文件夹 {len(video_source_folders)} 个（执行时扫描）"
+            self.video_source_var.set("已选 " + detail)
         else:
             self.video_source_var.set("尚未选择字幕来源")
 
-        video_samples = self._current_video_samples()
-        self.video_sample_display_items = []
         self.video_sample_list.delete(0, tk.END)
-        for index, path in enumerate(video_samples, 1):
-            self.video_sample_display_items.append(("file", str(path)))
-            self.video_sample_list.insert(tk.END, f"{index}. {path.suffix.lower()} | {path}")
-        for folder in self.video_sample_folders:
-            self.video_sample_display_items.append(("folder", folder))
-            self.video_sample_list.insert(tk.END, f"[视频页示例文件夹] {folder}")
+        for text, _ in self.video_sample_collection.display_items:
+            self.video_sample_list.insert(tk.END, text)
 
-        self.mux_video_display_items = []
         self.mux_video_list.delete(0, tk.END)
-        for path in self._current_mux_videos():
-            self.mux_video_display_items.append(("file", str(path)))
-            self.mux_video_list.insert(tk.END, str(path))
-        for folder in self.mux_video_folders:
-            self.mux_video_display_items.append(("folder", folder))
-            self.mux_video_list.insert(tk.END, f"[视频文件夹] {folder}")
-
-    def _delete_selected(
-        self,
-        listbox: tk.Listbox,
-        display_items: list[tuple[str, str]],
-        files: list[str],
-        folders: list[str],
-        excluded: set[str],
-    ) -> None:
-        for index in sorted(listbox.curselection(), reverse=True):
-            if index >= len(display_items):
-                continue
-            kind, value = display_items[index]
-            if kind == "folder":
-                folders[:] = [item for item in folders if item != value]
-            else:
-                files[:] = [item for item in files if item != value]
-                excluded.add(str(Path(value).resolve()).casefold())
-        self.refresh_lists()
+        for text, _ in self.mux_video_collection.display_items:
+            self.mux_video_list.insert(tk.END, text)
 
     def delete_selected_targets(self) -> None:
-        self._delete_selected(
-            self.target_list,
-            self.target_display_items,
-            self.target_files,
-            self.target_folders,
-            self.target_excluded,
-        )
+        self.target_collection.remove_indices(list(self.target_list.curselection()))
+        self.refresh_lists()
 
     def delete_selected_samples(self) -> None:
-        self._delete_selected(
-            self.sample_list,
-            self.sample_display_items,
-            self.sample_files,
-            self.sample_folders,
-            self.sample_excluded,
-        )
+        self.sample_collection.remove_indices(list(self.sample_list.curselection()))
+        self.refresh_lists()
 
     def delete_selected_video_sources(self) -> None:
-        self._delete_selected(
-            self.video_source_list,
-            self.video_source_display_items,
-            self.video_source_files,
-            self.video_source_folders,
-            self.video_source_excluded,
-        )
+        self.video_source_collection.remove_indices(list(self.video_source_list.curselection()))
+        self.refresh_lists()
 
     def delete_selected_video_samples(self) -> None:
-        self._delete_selected(
-            self.video_sample_list,
-            self.video_sample_display_items,
-            self.video_sample_files,
-            self.video_sample_folders,
-            self.video_sample_excluded,
-        )
+        self.video_sample_collection.remove_indices(list(self.video_sample_list.curselection()))
+        self.refresh_lists()
+
+    def delete_selected_mux_videos(self) -> None:
+        self.mux_video_collection.remove_indices(list(self.mux_video_list.curselection()))
+        self.refresh_lists()
 
     def clear_targets(self) -> None:
-        self.target_files = []
-        self.target_folders = []
-        self.target_excluded.clear()
+        self.target_collection.clear()
         self.refresh_lists()
 
     def clear_samples(self) -> None:
-        self.sample_files = []
-        self.sample_folders = []
-        self.sample_excluded.clear()
+        self.sample_collection.clear()
         self.refresh_lists()
 
     def clear_video_sources(self) -> None:
-        self.video_source_files = []
-        self.video_source_folders = []
-        self.video_source_excluded.clear()
+        self.video_source_collection.clear()
         self.refresh_lists()
 
     def clear_video_samples(self) -> None:
-        self.video_sample_files = []
-        self.video_sample_folders = []
-        self.video_sample_excluded.clear()
+        self.video_sample_collection.clear()
+        self.refresh_lists()
+
+    def clear_mux_videos(self) -> None:
+        self.mux_video_collection.clear()
         self.refresh_lists()
 
     def choose_output(self) -> None:
@@ -698,31 +695,25 @@ class FeatureFrame(ToolFrame):
     def choose_video_sources(self) -> None:
         paths = filedialog.askopenfilenames(
             title="选择视频页字幕来源",
-            filetypes=[
-                ("字幕/视频", "*.ass *.ssa *.srt *.vtt *.skrt *.mkv *.mp4 *.mov *.avi *.wmv *.flv *.webm *.m4v"),
-                ("所有文件", "*.*"),
-            ],
+            filetypes=[("字幕/视频", "*.ass *.ssa *.srt *.vtt *.skrt *.mkv *.mp4 *.mov *.avi *.wmv *.flv *.webm *.m4v"), ("所有文件", "*.*")],
         )
         if paths:
-            self.video_source_files.extend(list(paths))
+            self.video_source_collection.add_files(list(paths))
             self.refresh_lists()
 
     def choose_video_source_folder(self) -> None:
         path = filedialog.askdirectory(title="选择包含字幕来源的文件夹")
         if path:
-            self.video_source_folders.append(path)
+            self.video_source_collection.add_folder(path)
             self.refresh_lists()
 
     def choose_video_samples(self) -> None:
         paths = filedialog.askopenfilenames(
             title="选择视频页示例字幕或视频",
-            filetypes=[
-                ("字幕/视频", "*.ass *.ssa *.srt *.vtt *.skrt *.mkv *.mp4 *.mov *.avi *.wmv *.flv *.webm *.m4v"),
-                ("所有文件", "*.*"),
-            ],
+            filetypes=[("字幕/视频", "*.ass *.ssa *.srt *.vtt *.skrt *.mkv *.mp4 *.mov *.avi *.wmv *.flv *.webm *.m4v"), ("所有文件", "*.*")],
         )
         if paths:
-            self.video_sample_files.extend(list(paths))
+            self.video_sample_collection.add_files(list(paths))
             if self.style_mode_var.get() == "manual":
                 self.style_mode_var.set("sample_manual" if self.has_manual_overrides() else "sample")
                 self.update_option_states()
@@ -731,7 +722,7 @@ class FeatureFrame(ToolFrame):
     def choose_video_sample_folder(self) -> None:
         path = filedialog.askdirectory(title="选择包含视频页示例的文件夹")
         if path:
-            self.video_sample_folders.append(path)
+            self.video_sample_collection.add_folder(path)
             if self.style_mode_var.get() == "manual":
                 self.style_mode_var.set("sample_manual" if self.has_manual_overrides() else "sample")
                 self.update_option_states()
@@ -745,19 +736,16 @@ class FeatureFrame(ToolFrame):
     def choose_mux_videos(self) -> None:
         paths = filedialog.askopenfilenames(
             title="选择要封装/删除字幕的视频",
-            filetypes=[
-                ("视频", "*.mkv *.mp4 *.mov *.avi *.wmv *.flv *.webm *.m4v"),
-                ("所有文件", "*.*"),
-            ],
+            filetypes=[("视频", "*.mkv *.mp4 *.mov *.avi *.wmv *.flv *.webm *.m4v"), ("所有文件", "*.*")],
         )
         if paths:
-            self.mux_video_files.extend(list(paths))
+            self.mux_video_collection.add_files(list(paths))
             self.refresh_lists()
 
     def choose_mux_video_folder(self) -> None:
         path = filedialog.askdirectory(title="选择包含视频的文件夹")
         if path:
-            self.mux_video_folders.append(path)
+            self.mux_video_collection.add_folder(path)
             self.refresh_lists()
 
     def _probe_video_group(self, label: str, paths: list[Path]) -> int:
@@ -878,25 +866,6 @@ class FeatureFrame(ToolFrame):
             text_conversion_mode=mode_key_from_label(self.text_conversion_var.get()),
         )
 
-    def _current_mux_videos(self) -> list[Path]:
-        files = collect_files_from_inputs(self.mux_video_files, self.mux_video_folders, extensions=VIDEO_EXTENSIONS)
-        return [path for path in files if str(path.resolve()).casefold() not in self.mux_video_excluded]
-
-    def delete_selected_mux_videos(self) -> None:
-        self._delete_selected(
-            self.mux_video_list,
-            self.mux_video_display_items,
-            self.mux_video_files,
-            self.mux_video_folders,
-            self.mux_video_excluded,
-        )
-
-    def clear_mux_videos(self) -> None:
-        self.mux_video_files = []
-        self.mux_video_folders = []
-        self.mux_video_excluded.clear()
-        self.refresh_lists()
-
     def _delete_video_tracks_job(
         self,
         videos: list[Path],
@@ -987,16 +956,20 @@ class FeatureFrame(ToolFrame):
         return [Path(output) for output in outputs]
 
     def start_style(self, button: tk.Widget) -> None:
-        targets = self._current_targets()
-        samples = self._current_samples()
-        if not targets:
+        target_snapshot = self.target_collection.snapshot()
+        sample_snapshot = self.sample_collection.snapshot()
+        if not target_snapshot.has_inputs:
             messagebox.showwarning("未选择目标", "请先在“字幕样式”页选择目标字幕或视频。")
             return
         options = self.build_options()
-        output_dir = self.output_var.get() or None
+        output_dir = self.output_var.get().strip() or None
         style_mode = self.style_mode_var.get()
 
         def job() -> str:
+            targets = resolve_input_snapshot(target_snapshot)
+            samples = resolve_input_snapshot(sample_snapshot)
+            if not targets:
+                raise RuntimeError("所选目标中没有找到可处理的字幕或视频文件。")
             outputs = self._modify_targets_job(
                 targets,
                 samples,
@@ -1009,75 +982,84 @@ class FeatureFrame(ToolFrame):
                 self.log_frame.write(str(output))
             return f"字幕处理完成，生成 {len(outputs)} 个文件。"
 
-        self.run_background(button, job)
+        out_target = output_dir or (target_snapshot.files[0].parent if target_snapshot.files else target_snapshot.folders[0])
+        self.run_background(button, job, output_dir=out_target)
 
     def start_video(self, button: tk.Widget) -> None:
-        sources = self._current_video_sources()
-        samples = self._current_video_samples()
-        mux_videos = self._current_mux_videos()
+        source_snapshot = self.video_source_collection.snapshot()
+        sample_snapshot = self.video_sample_collection.snapshot()
+        mux_snapshot = self.mux_video_collection.snapshot()
         action = self.video_action_var.get()
-        output_dir = self.video_output_var.get() or None
+        output_dir = self.video_output_var.get().strip() or None
         all_tracks = self.all_tracks_var.get()
         stream_index = self.stream_var.get()
         replace_existing = self.replace_video_subtitles_var.get()
 
         if action == VIDEO_ACTION_REMOVE:
-            if not mux_videos:
+            if not mux_snapshot.has_inputs:
                 messagebox.showwarning("未选择视频", "请在“视频轨道与封装”页选择要删除字幕轨的视频。")
                 return
             self.run_background(
                 button,
                 lambda: self._delete_video_tracks_job(
-                    mux_videos,
+                    resolve_input_snapshot(mux_snapshot),
                     output_dir,
                     all_tracks,
                     stream_index,
                 ),
+                output_dir=output_dir or (mux_snapshot.files[0].parent if mux_snapshot.files else mux_snapshot.folders[0]),
             )
             return
 
         if action == VIDEO_ACTION_EXTRACT_AUDIO:
-            if not mux_videos:
+            if not mux_snapshot.has_inputs:
                 messagebox.showwarning("未选择视频", "请在“视频轨道与封装”页选择要提取音频的视频。")
                 return
             self.run_background(
                 button,
-                lambda: self._extract_audio_job(mux_videos, output_dir, stream_index),
+                lambda: self._extract_audio_job(resolve_input_snapshot(mux_snapshot), output_dir, stream_index),
+                output_dir=output_dir or (mux_snapshot.files[0].parent if mux_snapshot.files else mux_snapshot.folders[0]),
             )
             return
 
-        if not mux_videos:
+        if not mux_snapshot.has_inputs:
             messagebox.showwarning("未选择视频", "请先在“视频轨道与封装”页选择目标视频。")
             return
 
         if action == VIDEO_ACTION_ADD:
-            if not any(is_subtitle(path) for path in sources):
+            if not source_snapshot.has_inputs:
                 messagebox.showwarning("未选择字幕", "请在当前页的“字幕来源”中选择要添加的单独字幕文件。")
                 return
             self.run_background(
                 button,
                 lambda: self._add_target_subtitles_job(
-                    sources,
-                    mux_videos,
+                    resolve_input_snapshot(source_snapshot),
+                    resolve_input_snapshot(mux_snapshot),
                     output_dir,
                     replace_existing,
                 ),
+                output_dir=output_dir or (mux_snapshot.files[0].parent if mux_snapshot.files else mux_snapshot.folders[0]),
             )
             return
 
         if action != VIDEO_ACTION_MODIFY:
             messagebox.showwarning("未选择操作", "请选择一个视频操作。")
             return
-        if not sources:
+        if not source_snapshot.has_inputs:
             messagebox.showwarning("未选择字幕来源", "请在当前页选择要修改并封装的字幕或视频。")
             return
         style_mode = self.style_mode_var.get()
-        if style_mode in {"sample", "sample_manual"} and not samples:
+        if style_mode in {"sample", "sample_manual"} and not sample_snapshot.has_inputs:
             messagebox.showwarning("未选择示例", "当前样式模式需要示例，请在当前页选择示例字幕或视频。")
             return
         options = self.build_options(remux_video=False)
 
         def job() -> str:
+            sources = resolve_input_snapshot(source_snapshot)
+            samples = resolve_input_snapshot(sample_snapshot)
+            mux_videos = resolve_input_snapshot(mux_snapshot)
+            if not sources or not mux_videos:
+                raise RuntimeError("视频操作输入在扫描后为空，请检查文件夹内容。")
             outputs = self._modify_targets_job(
                 sources,
                 samples,
@@ -1100,7 +1082,11 @@ class FeatureFrame(ToolFrame):
                 self.log_frame.write(str(output))
             return f"修改并封装完成，生成 {len(mux_outputs)} 个 MKV。"
 
-        self.run_background(button, job)
+        self.run_background(
+            button,
+            job,
+            output_dir=output_dir or (mux_snapshot.files[0].parent if mux_snapshot.files else mux_snapshot.folders[0]),
+        )
 
     def start(self, button: tk.Widget) -> None:
         """Compatibility entry point for standalone callers."""

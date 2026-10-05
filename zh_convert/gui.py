@@ -1,14 +1,21 @@
 from __future__ import annotations
 
-import tkinter as tk
 from pathlib import Path
-from tkinter import filedialog, messagebox, scrolledtext, ttk
+import tkinter as tk
+from tkinter import filedialog, scrolledtext, ttk
 
-from common.gui_base import ToolFrame, bind_listbox_delete_menu
+from common.file_selection import InputFileCollection, resolve_input_snapshot
+from common.gui_base import FileListCard, ToolFrame
 from common.theme import BASE_FONT_SIZE, COLORS, FONT_FAMILY
 from common.zhconv import MODES, TEXT_EXTENSIONS, convert_chinese_text, mode_key_from_label, read_text_auto
 
-from .core import collect_convertible_files, convert_many
+from .core import convert_many
+
+
+ZH_FILETYPES = [
+    ("文本与字幕文件", "*.txt *.srt *.ass *.vtt *.xml *.md *.html *.htm *.lrc *.json *.csv"),
+    ("所有文件", "*.*"),
+]
 
 
 class FeatureFrame(ToolFrame):
@@ -17,32 +24,28 @@ class FeatureFrame(ToolFrame):
 
     def __init__(self, master):
         super().__init__(master)
-        self.files: list[str] = []
-        self.folders: list[str] = []
-        self.excluded_paths: set[str] = set()
-        self.display_items: list[tuple[str, str]] = []
         self.output_var = tk.StringVar()
         self.mode_var = tk.StringVar(value="繁体 -> 简体")
         self.output_format_var = tk.StringVar(value="same")
-        self.summary_var = tk.StringVar(value="尚未选择输入")
         self._build()
 
     def _build(self) -> None:
         top = ttk.Frame(self)
         top.pack(fill=tk.BOTH, expand=False, pady=(2, 4))
 
-        input_frame = ttk.LabelFrame(top, text="Step 1 · 📁 待转换文本素材", style="Card.TLabelframe", padding=8)
-        input_frame.pack(side=tk.LEFT, fill=tk.BOTH, expand=True, padx=(0, 8))
-        buttons = ttk.Frame(input_frame)
-        buttons.pack(anchor=tk.W, pady=(0, 4))
-        ttk.Button(buttons, text="+ 选择文本/字幕/XML", command=self.choose_files).pack(side=tk.LEFT)
-        ttk.Button(buttons, text="📁 扫描文件夹", command=self.choose_folder).pack(side=tk.LEFT, padx=6)
-        ttk.Button(buttons, text="清空", command=self.clear_items).pack(side=tk.LEFT)
-        self.listbox = tk.Listbox(input_frame, height=3, exportselection=False)
-        self.listbox.pack(fill=tk.BOTH, expand=True, pady=2)
-        bind_listbox_delete_menu(self.listbox, self.delete_selected, self.clear_items)
-        self.listbox.bind("<<ListboxSelect>>", lambda _event: self.update_preview())
-        ttk.Label(input_frame, textvariable=self.summary_var, style="Badge.TLabel").pack(anchor=tk.W, pady=(2, 0))
+        self.collection = InputFileCollection(allowed_extensions=TEXT_EXTENSIONS)
+        self.file_card = FileListCard(
+            top,
+            title="Step 1 · 📁 待转换文本素材",
+            collection=self.collection,
+            filetypes=ZH_FILETYPES,
+            file_dialog_title="选择文本、字幕或 XML 文件",
+            height=3,
+            padding=8,
+            on_changed=self.update_preview,
+        )
+        self.file_card.pack(side=tk.LEFT, fill=tk.BOTH, expand=True, padx=(0, 8))
+        self.file_card.listbox.bind("<<ListboxSelect>>", lambda _event: self.update_preview())
 
         form = ttk.LabelFrame(top, text="Step 2 · ⚙️ 繁简转换规则与输出", style="Card.TLabelframe", padding=8)
         form.pack(side=tk.RIGHT, fill=tk.BOTH)
@@ -102,7 +105,7 @@ class FeatureFrame(ToolFrame):
             relief=tk.FLAT,
             bd=0,
             highlightthickness=1,
-            highlightbackground=COLORS["border_light"],
+            highlightbackground=COLORS["border"],
             highlightcolor=COLORS["primary"],
             font=(FONT_FAMILY, BASE_FONT_SIZE),
             padx=8,
@@ -110,117 +113,72 @@ class FeatureFrame(ToolFrame):
         )
         return widget
 
-    def choose_files(self) -> None:
-        patterns = " ".join(f"*{suffix}" for suffix in sorted(TEXT_EXTENSIONS))
-        paths = filedialog.askopenfilenames(
-            title="选择要转换的文本/字幕/XML 文件",
-            filetypes=[("可转换文本", patterns), ("所有文件", "*.*")],
-        )
-        if paths:
-            self.files.extend(list(paths))
-            self.refresh_list()
-
-    def choose_folder(self) -> None:
-        path = filedialog.askdirectory(title="选择包含文本/字幕/XML 的文件夹")
-        if path:
-            self.folders.append(path)
-            self.refresh_list()
-
     def choose_output(self) -> None:
-        path = filedialog.askdirectory(title="选择输出目录")
-        if path:
-            self.output_var.set(path)
-
-    def current_files(self) -> list[Path]:
-        return collect_convertible_files(self.files, self.folders, self.excluded_paths)
-
-    def refresh_list(self) -> None:
-        self.display_items = []
-        self.listbox.delete(0, tk.END)
-        for path in self.current_files():
-            self.display_items.append(("file", str(path)))
-            self.listbox.insert(tk.END, str(path))
-        for folder in self.folders:
-            self.display_items.append(("folder", folder))
-            self.listbox.insert(tk.END, f"[文件夹扫描] {folder}")
-        file_count = len([item for item in self.display_items if item[0] == "file"])
-        folder_count = len([item for item in self.display_items if item[0] == "folder"])
-        self.summary_var.set(f"已选择 {file_count} 个文件，{folder_count} 个文件夹。" if file_count or folder_count else "尚未选择输入")
-        self.update_preview()
-
-    def delete_selected(self) -> None:
-        for index in sorted(self.listbox.curselection(), reverse=True):
-            if index >= len(self.display_items):
-                continue
-            kind, value = self.display_items[index]
-            if kind == "folder":
-                self.folders = [item for item in self.folders if item != value]
-            else:
-                self.files = [item for item in self.files if item != value]
-                self.excluded_paths.add(str(Path(value).resolve()).casefold())
-        self.refresh_list()
-
-    def clear_items(self) -> None:
-        self.files = []
-        self.folders = []
-        self.excluded_paths.clear()
-        self.refresh_list()
-        self.log_frame.clear()
-
-    def _preview_file(self) -> Path | None:
-        selection = self.listbox.curselection()
-        if selection:
-            index = selection[0]
-            if index < len(self.display_items) and self.display_items[index][0] == "file":
-                return Path(self.display_items[index][1])
-        files = self.current_files()
-        return files[0] if files else None
-
-    def _set_text(self, widget: scrolledtext.ScrolledText, value: str) -> None:
-        widget.configure(state=tk.NORMAL)
-        widget.delete("1.0", tk.END)
-        widget.insert(tk.END, value)
-        widget.configure(state=tk.DISABLED)
+        target = filedialog.askdirectory(title="选择输出目录")
+        if target:
+            self.output_var.set(target)
 
     def update_preview(self) -> None:
-        path = self._preview_file()
-        if not path:
-            self._set_text(self.before_text, "尚未选择可预览文件")
-            self._set_text(self.after_text, "")
+        selected_idx = self.file_card.listbox.curselection()
+        target_file: Path | None = None
+        if selected_idx and selected_idx[0] < len(self.file_card.collection.display_items):
+            _, raw_key = self.file_card.collection.display_items[selected_idx[0]]
+            candidate = Path(raw_key)
+            if candidate.is_file() and candidate.suffix.casefold() in TEXT_EXTENSIONS:
+                target_file = candidate
+        if target_file is None:
+            direct_files = [
+                path for path in self.collection.direct_files()
+                if path.suffix.casefold() in TEXT_EXTENSIONS
+            ]
+            target_file = direct_files[0] if direct_files else None
+        if target_file is None:
+            self._set_preview_content("", "")
+            if self.collection.visible_folders():
+                self._set_preview_content("文件夹内容将在开始转换时后台扫描。", "")
             return
+
         try:
-            text = read_text_auto(path)
-            sample = text[:3000]
-            converted = convert_chinese_text(sample, mode_key_from_label(self.mode_var.get()))
-            self._set_text(self.before_text, sample)
-            self._set_text(self.after_text, converted)
+            sample = read_text_auto(target_file)
+            lines = sample.splitlines()[:12]
+            preview_source = "\n".join(lines)
+            mode_key = mode_key_from_label(self.mode_var.get())
+            preview_converted = convert_chinese_text(preview_source, mode_key)
+            self._set_preview_content(preview_source, preview_converted)
         except Exception as exc:
-            self._set_text(self.before_text, str(path))
-            self._set_text(self.after_text, f"预览失败: {exc}")
+            self._set_preview_content(f"预览读取失败: {exc}", "")
+
+    def _set_preview_content(self, before: str, after: str) -> None:
+        self.before_text.delete("1.0", tk.END)
+        self.before_text.insert(tk.END, before)
+        self.after_text.delete("1.0", tk.END)
+        self.after_text.insert(tk.END, after)
 
     def start(self, button: tk.Widget) -> None:
-        files = self.current_files()
-        if not files:
-            messagebox.showwarning("未选择文件", "请先选择要转换的文本、字幕或 XML 文件。")
+        snapshot = self.collection.snapshot()
+        if not snapshot.has_inputs:
+            self.log_frame.write("请先添加需要转换的文本素材。")
             return
 
-        mode = mode_key_from_label(self.mode_var.get())
+        mode_key = mode_key_from_label(self.mode_var.get())
+        output_dir = self.output_var.get().strip() or None
+        output_format = self.output_format_var.get()
 
         def job() -> str:
-            outputs = convert_many(
+            files = resolve_input_snapshot(snapshot, extensions=TEXT_EXTENSIONS)
+            if not files:
+                raise RuntimeError("所选输入中没有可转换的文本或字幕文件。")
+            generated = convert_many(
                 files,
-                self.output_var.get() or None,
-                mode,
-                output_format=self.output_format_var.get(),
+                mode=mode_key,
+                output_dir=output_dir,
+                output_format=output_format,
                 log=self.log_frame.write,
             )
-            if not outputs:
-                raise RuntimeError("没有生成任何转换结果。")
-            self.log_frame.write(f"完成，共生成 {len(outputs)} 个文件。")
-            if outputs:
-                self.last_output_dir = Path(outputs[0]).parent
-            self.call_in_ui(self.update_preview)
-            return f"转换完成，生成 {len(outputs)} 个文件。"
+            self.log_frame.write(f"完成，共转换 {len(generated)} 个文本文件。")
+            if generated:
+                self.last_output_dir = Path(generated[0]).parent
+            return f"完成，共转换 {len(generated)} 个文本文件"
 
-        out_target = self.output_var.get() or (files[0].parent / "繁简转换输出" if files else None)
+        out_target = output_dir or (snapshot.files[0].parent if snapshot.files else snapshot.folders[0])
         self.run_background(button, job, output_dir=out_target)
