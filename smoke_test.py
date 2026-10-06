@@ -18,9 +18,10 @@ from common.media_tools import find_ffmpeg, probe_subtitle_streams, run_hidden
 from common.paths import ensure_runtime_dirs
 from common.zhconv import convert_chinese_text, convert_text_file
 from image_archive_pdf.core import convert_folder_items_to_pdf, convert_mixed_items, save_text_to_pdf
+from language_tools.core import detect_language
 from rename_files.core import ManualRenameRule, build_manual_pairs, build_pairs, copy_by_pairs, format_manual_name
 from rename_files.gui import FeatureFrame as RenameFeatureFrame
-from subtitles.core import StyleOptions, modify_subtitle_or_video
+from subtitles.core import BilingualOptions, StyleOptions, build_bilingual_from_inputs, modify_subtitle_or_video
 from subtitles.core import modify_many
 from subtitles.core import mux_subtitles_into_videos, remove_subtitle_tracks_from_videos
 from subtitles.gui import FeatureFrame, VIDEO_ACTION_ADD, VIDEO_ACTION_REMOVE
@@ -353,6 +354,52 @@ def smoke_subtitles(base: Path) -> None:
     if "-->" not in srt_text or "hello" not in srt_text:
         raise AssertionError("subtitle srt output content failed")
 
+    bilingual_top = source / "bilingual_top.srt"
+    bilingual_bottom = source / "bilingual_bottom.srt"
+    bilingual_top.write_text(
+        "1\n00:00:01,000 --> 00:00:02,000\n第一行\n第二行\n\n"
+        "2\n00:00:03,000 --> 00:00:04,000\n继续\n",
+        encoding="utf-8",
+    )
+    bilingual_bottom.write_text(
+        "1\n00:00:01,080 --> 00:00:02,100\nsecond line\n\n"
+        "2\n00:00:03,080 --> 00:00:04,100\ncontinue\n",
+        encoding="utf-8",
+    )
+    bilingual_outputs = build_bilingual_from_inputs(
+        [bilingual_top, bilingual_bottom],
+        source / "out_bilingual",
+        options=BilingualOptions(secondary_scale=0.78, sync_tolerance=1.2),
+        log=log,
+    )
+    if len(bilingual_outputs) != 1:
+        raise AssertionError("bilingual subtitle output count failed")
+    bilingual_text = bilingual_outputs[0].read_text(encoding="utf-8")
+    if "第一行 / 第二行" not in bilingual_text or "BilingualSecondary" not in bilingual_text:
+        raise AssertionError("bilingual single-line normalization failed")
+    if bilingual_text.count("Dialogue:") != 4:
+        raise AssertionError("bilingual cue matching failed")
+
+    single_source = source / "single_simplified.srt"
+    single_source.write_text(
+        "1\n00:00:01,000 --> 00:00:02,000\n简体字与台湾\n",
+        encoding="utf-8",
+    )
+    detected = detect_language("简体字与台湾")
+    if detected.code != "zh-Hans":
+        raise AssertionError(f"language detection failed: {detected}")
+    single_outputs = build_bilingual_from_inputs(
+        [single_source],
+        source / "out_single_bilingual",
+        options=BilingualOptions(single_source_mode="auto_chinese"),
+        log=log,
+    )
+    if len(single_outputs) != 1:
+        raise AssertionError("single subtitle bilingual output count failed")
+    single_text = single_outputs[0].read_text(encoding="utf-8")
+    if "簡體字與臺灣" not in single_text or single_text.count("Dialogue:") != 2:
+        raise AssertionError("single subtitle automatic Chinese bilingual failed")
+
     def create_test_video_with_subtitles(video_path: Path, sub_paths: list[Path]) -> None:
         ffmpeg = find_ffmpeg()
         if not ffmpeg:
@@ -389,6 +436,27 @@ def smoke_subtitles(base: Path) -> None:
         streams = probe_subtitle_streams(video)
         if len(streams) < 2:
             raise AssertionError("test video creation failed")
+
+        bilingual_video_outputs = build_bilingual_from_inputs(
+            [video],
+            source / "out_bilingual_video",
+            options=BilingualOptions(),
+            log=log,
+        )
+        if len(bilingual_video_outputs) != 1:
+            raise AssertionError("internal subtitle bilingual output count failed")
+        bilingual_video_text = bilingual_video_outputs[0].read_text(encoding="utf-8")
+        if bilingual_video_text.count("Dialogue:") != 2:
+            raise AssertionError("internal subtitle bilingual cue output failed")
+        bilingual_mkv = mux_subtitles_into_videos(
+            bilingual_video_outputs,
+            [video],
+            source / "out_bilingual_mkv",
+            replace_existing_subtitles=True,
+            log=log,
+        )
+        if len(probe_subtitle_streams(bilingual_mkv[0])) != 1:
+            raise AssertionError("bilingual MKV packaging failed")
 
         video_outputs = modify_many(
             [video],

@@ -11,6 +11,7 @@ from common.log import Logger, emit
 from common.media_tools import find_ffmpeg, find_ffprobe, probe_audio_streams, probe_subtitle_streams, run_hidden
 from common.text_utils import safe_stem, unique_path
 from common.zhconv import convert_chinese_text
+from language_tools.core import automatic_chinese_mode, detect_cues_language, translate_cues
 
 
 SUBTITLE_EXTENSIONS = {".ass", ".ssa", ".srt", ".vtt", ".skrt"}
@@ -101,6 +102,29 @@ class StyleOptions:
     all_subtitle_streams: bool = True
     output_format: str = "same"
     text_conversion_mode: str = "none"
+
+
+@dataclass(frozen=True)
+class BilingualOptions:
+    """Options for building one readable bilingual ASS track."""
+
+    style_preset: str = "reference"
+    secondary_scale: float = 0.78
+    sync_tolerance: float = 1.2
+    flatten_separator: str = " / "
+    keep_unmatched: bool = True
+    # When there is only one source track, only bundled Chinese conversion is
+    # automatic. Other languages are reported instead of being duplicated as a
+    # misleading "translation".
+    single_source_mode: str = "auto_chinese"
+
+
+@dataclass(frozen=True)
+class SubtitleTrack:
+    source_path: Path
+    label: str
+    track_index: int | None
+    cues: tuple[tuple[str, str, str], ...]
 
 
 def is_subtitle(path: str | Path) -> bool:
@@ -499,6 +523,294 @@ def parse_srt_like(text: str) -> list[tuple[str, str, str]]:
         body = re.sub(r"<[^>]+>", "", body)
         cues.append((normalize_time(start), normalize_time(end), body))
     return cues
+
+
+def _subtitle_time_seconds(value: str) -> float:
+    """Convert ASS/SRT/VTT time to seconds for tolerant cue matching."""
+    raw = value.strip().replace(",", ".")
+    parts = raw.split(":")
+    try:
+        if len(parts) == 3:
+            hours, minutes, seconds = parts
+        elif len(parts) == 2:
+            hours, minutes, seconds = "0", parts[0], parts[1]
+        else:
+            return 0.0
+        return max(0.0, int(hours) * 3600 + int(minutes) * 60 + float(seconds))
+    except (TypeError, ValueError):
+        return 0.0
+
+
+def _flatten_subtitle_text(text: str, separator: str = " / ") -> str:
+    """Remove drawing/style tags and collapse an original multi-line cue."""
+    cleaned = re.sub(r"\{[^}]*\}", "", text)
+    cleaned = re.sub(r"<[^>]+>", "", cleaned)
+    parts = [part.strip() for part in re.split(r"(?:\\N|\\n|\r?\n)+", cleaned) if part.strip()]
+    return separator.join(parts)
+
+
+def parse_subtitle_cues(text: str, suffix: str = ".srt", separator: str = " / ") -> list[tuple[str, str, str]]:
+    """Parse ASS/SRT/VTT-like text and normalize every cue to one visual line."""
+    if suffix.casefold() in {".ass", ".ssa"}:
+        raw_cues = parse_ass_dialogues(text)
+    else:
+        raw_cues = parse_srt_like(text)
+    cues: list[tuple[str, str, str]] = []
+    for start, end, body in raw_cues:
+        normalized_start = normalize_time(start)
+        normalized_end = normalize_time(end)
+        if _subtitle_time_seconds(normalized_end) <= _subtitle_time_seconds(normalized_start):
+            continue
+        flattened = _flatten_subtitle_text(body, separator)
+        if flattened:
+            cues.append((normalized_start, normalized_end, flattened))
+    return cues
+
+
+def read_subtitle_cues(path: str | Path, separator: str = " / ") -> list[tuple[str, str, str]]:
+    source = Path(path)
+    return parse_subtitle_cues(read_text(source), source.suffix, separator=separator)
+
+
+def _cue_overlap_seconds(first: tuple[str, str, str], second: tuple[str, str, str]) -> float:
+    first_start, first_end = _subtitle_time_seconds(first[0]), _subtitle_time_seconds(first[1])
+    second_start, second_end = _subtitle_time_seconds(second[0]), _subtitle_time_seconds(second[1])
+    return max(0.0, min(first_end, second_end) - max(first_start, second_start))
+
+
+def match_bilingual_cues(
+    primary: list[tuple[str, str, str]],
+    secondary: list[tuple[str, str, str]],
+    tolerance: float = 1.2,
+    keep_unmatched: bool = True,
+) -> tuple[list[tuple[tuple[str, str, str] | None, tuple[str, str, str] | None]], int, int]:
+    """Pair tracks by overlap first, then nearest start time without reusing cues."""
+    remaining = set(range(len(secondary)))
+    merged: list[tuple[tuple[str, str, str] | None, tuple[str, str, str] | None]] = []
+    matched = 0
+    for first in primary:
+        first_start = _subtitle_time_seconds(first[0])
+        candidates: list[tuple[tuple[int, float, float, int], int]] = []
+        for index in remaining:
+            second = secondary[index]
+            overlap = _cue_overlap_seconds(first, second)
+            distance = abs(first_start - _subtitle_time_seconds(second[0]))
+            if overlap > 0 or distance <= max(0.0, tolerance):
+                candidates.append(((1 if overlap > 0 else 0, overlap, -distance, -index), index))
+        if candidates:
+            _, selected = max(candidates)
+            remaining.remove(selected)
+            merged.append((first, secondary[selected]))
+            matched += 1
+        else:
+            merged.append((first, None))
+
+    if keep_unmatched:
+        unmatched = sorted((secondary[index] for index in remaining), key=lambda cue: _subtitle_time_seconds(cue[0]))
+        merged.extend((None, cue) for cue in unmatched)
+    return merged, matched, len(remaining)
+
+
+def _sample_bilingual_styles(reference_text: str | None) -> tuple[dict[str, str], dict[str, str], dict[str, str]]:
+    primary = dict(DEFAULT_ASS_STYLE)
+    secondary = dict(DEFAULT_ASS_STYLE)
+    script_info = parse_script_info_values(reference_text or "")
+    if reference_text:
+        _, styles = parse_ass_styles(reference_text)
+        if styles:
+            counts = ass_style_usage_counts(reference_text)
+            ranked = sorted(
+                styles,
+                key=lambda style: counts.get(style.get("Name", ""), 0),
+                reverse=True,
+            )
+            primary.update(ranked[0])
+            secondary.update(ranked[1] if len(ranked) > 1 else ranked[0])
+    return primary, secondary, script_info
+
+
+def _style_number(style: dict[str, str], field: str, fallback: float) -> float:
+    try:
+        return float(style.get(field, fallback))
+    except (TypeError, ValueError):
+        return fallback
+
+
+def build_bilingual_ass(
+    primary_cues: list[tuple[str, str, str]],
+    secondary_cues: list[tuple[str, str, str]],
+    reference_text: str | None = None,
+    options: BilingualOptions | None = None,
+    title: str = "Bilingual subtitles",
+) -> tuple[str, int, int]:
+    """Build two independent ASS dialogue layers so the lower language can be smaller."""
+    settings = options or BilingualOptions()
+    primary_style, secondary_style, script_info = _sample_bilingual_styles(reference_text if settings.style_preset == "reference" else None)
+    primary_style = {**DEFAULT_ASS_STYLE, **primary_style, "Name": "BilingualPrimary"}
+    secondary_style = {**DEFAULT_ASS_STYLE, **secondary_style, "Name": "BilingualSecondary"}
+
+    primary_size = _style_number(primary_style, "Fontsize", 48.0)
+    scale = min(0.95, max(0.5, float(settings.secondary_scale)))
+    reference_secondary_size = _style_number(secondary_style, "Fontsize", primary_size * scale)
+    secondary_size = max(12.0, min(primary_size * scale, reference_secondary_size))
+    secondary_style["Fontsize"] = str(int(round(secondary_size)))
+    primary_style["Fontsize"] = str(int(round(primary_size)))
+
+    base_margin = max(10, int(_style_number(secondary_style, "MarginV", 30.0)))
+    secondary_style["Alignment"] = "2"
+    primary_style["Alignment"] = "2"
+    secondary_style["MarginV"] = str(base_margin)
+    primary_style["MarginV"] = str(max(base_margin + int(secondary_size) + 8, int(_style_number(primary_style, "MarginV", base_margin))))
+
+    merged, matched, unmatched = match_bilingual_cues(
+        primary_cues,
+        secondary_cues,
+        tolerance=max(0.0, float(settings.sync_tolerance)),
+        keep_unmatched=settings.keep_unmatched,
+    )
+    events: list[str] = []
+    for first, second in merged:
+        cue = first or second
+        if cue is None:
+            continue
+        start, end = normalize_time(cue[0]), normalize_time(cue[1])
+        if first:
+            first_text = _flatten_subtitle_text(first[2], settings.flatten_separator)
+            if first_text:
+                events.append(f"Dialogue: 0,{start},{end},BilingualPrimary,,0,0,0,,{first_text}")
+        if second:
+            second_text = _flatten_subtitle_text(second[2], settings.flatten_separator)
+            if second_text:
+                events.append(f"Dialogue: 0,{start},{end},BilingualSecondary,,0,0,0,,{second_text}")
+
+    info = {
+        "WrapStyle": script_info.get("WrapStyle", "0"),
+        "ScaledBorderAndShadow": script_info.get("ScaledBorderAndShadow", "yes"),
+        "PlayResX": script_info.get("PlayResX", "1920"),
+        "PlayResY": script_info.get("PlayResY", "1080"),
+        "YCbCr Matrix": script_info.get("YCbCr Matrix", "TV.709"),
+    }
+    header = ["[Script Info]", f"Title: {title}", "ScriptType: v4.00+", *[f"{key}: {value}" for key, value in info.items()]]
+    output = "\n".join(
+        [
+            *header,
+            "",
+            "[V4+ Styles]",
+            "Format: " + ",".join(DEFAULT_ASS_FORMAT),
+            style_to_line(DEFAULT_ASS_FORMAT, primary_style),
+            style_to_line(DEFAULT_ASS_FORMAT, secondary_style),
+            "",
+            "[Events]",
+            "Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text",
+            *events,
+            "",
+        ]
+    )
+    return output, matched, unmatched
+
+
+def load_bilingual_tracks(
+    paths: list[str | Path],
+    log: Logger | None = None,
+    separator: str = " / ",
+) -> list[SubtitleTrack]:
+    """Read standalone subtitle files and every internal track from selected videos."""
+    tracks: list[SubtitleTrack] = []
+    with tempfile.TemporaryDirectory(prefix="zipmkv_bilingual_extract_") as temp_name:
+        temp_dir = Path(temp_name)
+        for path_value in paths:
+            path = Path(path_value)
+            if is_subtitle(path):
+                cues = tuple(read_subtitle_cues(path, separator=separator))
+                if cues:
+                    tracks.append(SubtitleTrack(path, path.name, None, cues))
+                else:
+                    emit(log, f"跳过空字幕: {path.name}")
+                continue
+            if not is_video(path):
+                continue
+            try:
+                extracted = extract_all_subtitles_from_video(path, temp_dir / safe_stem(path.stem), log=log)
+                for index, extracted_path in enumerate(extracted):
+                    cues = tuple(read_subtitle_cues(extracted_path, separator=separator))
+                    if cues:
+                        tracks.append(SubtitleTrack(path, f"{path.name} · 内封轨 {index}", index, cues))
+            except Exception as exc:
+                emit(log, f"跳过视频字幕 {path.name}: {exc}")
+    return tracks
+
+
+def build_bilingual_from_inputs(
+    paths: list[str | Path],
+    output_dir: str | Path | None,
+    reference_text: str | None = None,
+    options: BilingualOptions | None = None,
+    log: Logger | None = None,
+) -> list[Path]:
+    """Create bilingual ASS files from video tracks and/or standalone subtitles."""
+    settings = options or BilingualOptions()
+    tracks = load_bilingual_tracks(paths, log=log, separator=settings.flatten_separator)
+    if not tracks:
+        raise RuntimeError("没有读取到可用字幕轨道或外挂字幕。")
+    out_root = Path(output_dir) if output_dir else Path(paths[0]).parent / "双语字幕输出"
+    out_root.mkdir(parents=True, exist_ok=True)
+
+    grouped: dict[Path, list[SubtitleTrack]] = {}
+    standalone: list[SubtitleTrack] = []
+    for track in tracks:
+        if track.track_index is None:
+            standalone.append(track)
+        else:
+            grouped.setdefault(track.source_path, []).append(track)
+
+    jobs: list[tuple[SubtitleTrack, SubtitleTrack | None, str]] = []
+    standalone_index = 0
+    for video_path, video_tracks in grouped.items():
+        for index in range(0, len(video_tracks), 2):
+            first = video_tracks[index]
+            second = video_tracks[index + 1] if index + 1 < len(video_tracks) else None
+            if second is None and standalone_index < len(standalone):
+                second = standalone[standalone_index]
+                standalone_index += 1
+            jobs.append((first, second, video_path.stem))
+    remaining = standalone[standalone_index:]
+    for index in range(0, len(remaining), 2):
+        first = remaining[index]
+        second = remaining[index + 1] if index + 1 < len(remaining) else None
+        jobs.append((first, second, first.source_path.stem))
+
+    outputs: list[Path] = []
+    for job_index, (first, second, base_name) in enumerate(jobs, 1):
+        detected = detect_cues_language(list(first.cues))
+        emit(log, f"[语言识别] {first.label}: {detected.label}，置信度 {detected.confidence:.0%}")
+        if second is not None:
+            second_language = detect_cues_language(list(second.cues))
+            emit(log, f"[语言识别] {second.label}: {second_language.label}，置信度 {second_language.confidence:.0%}")
+        secondary_cues = list(second.cues) if second else []
+        if second is None:
+            mode = (settings.single_source_mode or "auto_chinese").strip().casefold()
+            if mode == "auto_chinese":
+                mode = automatic_chinese_mode(detected) or "none"
+            if mode in {"s2t", "t2s"}:
+                secondary_cues = translate_cues(list(first.cues), mode)
+                emit(log, f"{first.label} 未找到第二轨，已离线生成 {('简体→繁体' if mode == 's2t' else '繁体→简体')} 第二字幕。")
+            elif settings.single_source_mode == "none" or mode == "none":
+                emit(log, f"{first.label} 未找到第二轨，按设置仅保留原文。")
+            else:
+                emit(log, f"{first.label} 未找到第二轨；当前语言没有内置离线翻译，按原文输出，不伪造翻译。")
+        content, matched, unmatched = build_bilingual_ass(
+            list(first.cues),
+            secondary_cues,
+            reference_text=reference_text,
+            options=settings,
+            title=f"{base_name} bilingual",
+        )
+        suffix = f"_bilingual{job_index if len(jobs) > 1 else ''}.ass"
+        output = unique_path(out_root / f"{safe_stem(base_name)}{suffix}")
+        output.write_text(content, encoding="utf-8", newline="\n")
+        outputs.append(output)
+        emit(log, f"生成双语字幕: {output.name}；主轨 {len(first.cues)} 条，匹配 {matched} 条，未匹配 {unmatched} 条")
+    return outputs
 
 
 def normalize_time(value: str) -> str:

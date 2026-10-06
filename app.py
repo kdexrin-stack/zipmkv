@@ -16,7 +16,7 @@ from common.theme import COLORS, FONT_FAMILY, apply_app_theme, enable_high_dpi_a
 from common.haruhi_theme import HARUHI_THEME
 from features import FEATURES, FeatureSpec
 
-APP_VERSION = "1.2.1"
+APP_VERSION = "1.3.0"
 
 
 class ZipMkvApp(tk.Tk):

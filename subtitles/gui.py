@@ -14,6 +14,7 @@ from common.theme import COLORS
 from common.zhconv import MODES, mode_key_from_label, mode_label
 
 from .core import (
+    BilingualOptions,
     SUBTITLE_EXTENSIONS,
     VIDEO_EXTENSIONS,
     StyleOptions,
@@ -24,6 +25,9 @@ from .core import (
     mux_subtitles_into_videos,
     remove_subtitle_tracks_from_videos,
     extract_audio_from_videos,
+    build_bilingual_from_inputs,
+    load_sample_style_texts,
+    merge_sample_texts,
 )
 
 
@@ -32,6 +36,7 @@ VIDEO_ACTION_MODIFY = "修改字幕后封装"
 VIDEO_ACTION_ADD = "直接添加字幕"
 VIDEO_ACTION_REMOVE = "删除视频字幕轨"
 VIDEO_ACTION_EXTRACT_AUDIO = "无损提取音频轨"
+VIDEO_ACTION_BILINGUAL = "提取/合成双语字幕"
 
 
 class FeatureFrame(ToolFrame):
@@ -57,6 +62,13 @@ class FeatureFrame(ToolFrame):
         self.style_mode_var = tk.StringVar(value="manual")
         self.safe_var = tk.BooleanVar(value=True)
         self.remux_var = tk.BooleanVar(value=False)
+        self.bilingual_package_var = tk.BooleanVar(value=False)
+        self.bilingual_keep_unmatched_var = tk.BooleanVar(value=True)
+        self.bilingual_flatten_var = tk.BooleanVar(value=True)
+        self.bilingual_reference_mode_var = tk.StringVar(value="参考文件优先")
+        self.bilingual_scale_var = tk.StringVar(value="0.78")
+        self.bilingual_tolerance_var = tk.StringVar(value="1.2")
+        self.bilingual_single_mode_var = tk.StringVar(value="检测中文后自动生成简繁双语")
         self.bold_var = tk.BooleanVar(value=False)
         self.italic_var = tk.BooleanVar(value=False)
         self.apply_bold_var = tk.BooleanVar(value=False)
@@ -351,7 +363,13 @@ class FeatureFrame(ToolFrame):
         ttk.Combobox(
             operation_frame,
             textvariable=self.video_action_var,
-            values=[VIDEO_ACTION_MODIFY, VIDEO_ACTION_ADD, VIDEO_ACTION_REMOVE, VIDEO_ACTION_EXTRACT_AUDIO],
+            values=[
+                VIDEO_ACTION_MODIFY,
+                VIDEO_ACTION_ADD,
+                VIDEO_ACTION_BILINGUAL,
+                VIDEO_ACTION_REMOVE,
+                VIDEO_ACTION_EXTRACT_AUDIO,
+            ],
             state="readonly",
             width=20,
         ).grid(row=0, column=1, sticky=tk.W, padx=6)
@@ -420,6 +438,67 @@ class FeatureFrame(ToolFrame):
         stream_spin.pack(side=tk.LEFT)
         self.stream_spins.append(stream_spin)
         ttk.Label(track_controls, text="所有结果输出为新 MKV，源视频保持不变。", style="Muted.TLabel").pack(side=tk.LEFT, padx=20)
+
+        bilingual_frame = ttk.LabelFrame(body, text="5. 双语字幕合成（选择“提取/合成双语字幕”后生效）", padding=8)
+        bilingual_frame.pack(fill=tk.X, pady=6)
+        bilingual_frame.columnconfigure(1, weight=1)
+        ttk.Label(bilingual_frame, text="样式来源").grid(row=0, column=0, sticky=tk.W, pady=4)
+        ttk.Combobox(
+            bilingual_frame,
+            textvariable=self.bilingual_reference_mode_var,
+            values=["参考文件优先", "内置清晰白字黑边"],
+            state="readonly",
+            width=20,
+        ).grid(row=0, column=1, sticky=tk.W, padx=6)
+        ttk.Label(
+            bilingual_frame,
+            text="示例区可放双语或单语 ASS/SRT/视频；单语示例只提供样式。",
+            style="Muted.TLabel",
+        ).grid(row=0, column=2, sticky=tk.W, padx=8)
+
+        ttk.Label(bilingual_frame, text="第二字幕字号比例").grid(row=1, column=0, sticky=tk.W, pady=4)
+        ttk.Entry(bilingual_frame, textvariable=self.bilingual_scale_var, width=8).grid(row=1, column=1, sticky=tk.W, padx=6)
+        ttk.Label(bilingual_frame, text="建议 0.70-0.85；第二字幕固定在下方且小于第一字幕。", style="Muted.TLabel").grid(
+            row=1, column=2, sticky=tk.W, padx=8
+        )
+        ttk.Label(bilingual_frame, text="时间匹配容差（秒）").grid(row=2, column=0, sticky=tk.W, pady=4)
+        ttk.Entry(bilingual_frame, textvariable=self.bilingual_tolerance_var, width=8).grid(row=2, column=1, sticky=tk.W, padx=6)
+        ttk.Label(bilingual_frame, text="先按重叠时间匹配，再按最近开始时间匹配。", style="Muted.TLabel").grid(
+            row=2, column=2, sticky=tk.W, padx=8
+        )
+        ttk.Label(bilingual_frame, text="只有单轨时").grid(row=3, column=0, sticky=tk.W, pady=4)
+        ttk.Combobox(
+            bilingual_frame,
+            textvariable=self.bilingual_single_mode_var,
+            values=[
+                "检测中文后自动生成简繁双语",
+                "缺少第二轨时仅保留原文",
+                "强制简体 -> 繁体",
+                "强制繁体 -> 简体",
+            ],
+            state="readonly",
+            width=24,
+        ).grid(row=3, column=1, sticky=tk.W, padx=6)
+        ttk.Label(
+            bilingual_frame,
+            text="仅中文支持内置离线互转；日文/英文等只识别并保留原文。",
+            style="Muted.TLabel",
+        ).grid(row=3, column=2, sticky=tk.W, padx=8)
+        ttk.Checkbutton(
+            bilingual_frame,
+            text="原字幕中的双行文本合并为单行（避免四行叠加）",
+            variable=self.bilingual_flatten_var,
+        ).grid(row=4, column=0, columnspan=2, sticky=tk.W, pady=3)
+        ttk.Checkbutton(
+            bilingual_frame,
+            text="保留未匹配字幕事件",
+            variable=self.bilingual_keep_unmatched_var,
+        ).grid(row=4, column=2, sticky=tk.W, padx=8)
+        ttk.Checkbutton(
+            bilingual_frame,
+            text="双语 ASS 同时封装到新 MKV（目标视频为空时使用来源视频）",
+            variable=self.bilingual_package_var,
+        ).grid(row=5, column=0, columnspan=3, sticky=tk.W, pady=3)
 
         ttk.Label(body, textvariable=self.status_var, style="Muted.TLabel", wraplength=900).pack(fill=tk.X, pady=8)
 
@@ -866,6 +945,30 @@ class FeatureFrame(ToolFrame):
             text_conversion_mode=mode_key_from_label(self.text_conversion_var.get()),
         )
 
+    def build_bilingual_options(self) -> BilingualOptions:
+        try:
+            scale = min(0.95, max(0.5, float(self.bilingual_scale_var.get().strip())))
+        except (TypeError, ValueError):
+            scale = 0.78
+        try:
+            tolerance = min(10.0, max(0.0, float(self.bilingual_tolerance_var.get().strip())))
+        except (TypeError, ValueError):
+            tolerance = 1.2
+        single_mode = {
+            "检测中文后自动生成简繁双语": "auto_chinese",
+            "缺少第二轨时仅保留原文": "none",
+            "强制简体 -> 繁体": "s2t",
+            "强制繁体 -> 简体": "t2s",
+        }.get(self.bilingual_single_mode_var.get(), "auto_chinese")
+        return BilingualOptions(
+            style_preset="reference" if self.bilingual_reference_mode_var.get() == "参考文件优先" else "default",
+            secondary_scale=scale,
+            sync_tolerance=tolerance,
+            flatten_separator=" / " if self.bilingual_flatten_var.get() else r"\N",
+            keep_unmatched=self.bilingual_keep_unmatched_var.get(),
+            single_source_mode=single_mode,
+        )
+
     def _delete_video_tracks_job(
         self,
         videos: list[Path],
@@ -994,6 +1097,59 @@ class FeatureFrame(ToolFrame):
         all_tracks = self.all_tracks_var.get()
         stream_index = self.stream_var.get()
         replace_existing = self.replace_video_subtitles_var.get()
+
+        if action == VIDEO_ACTION_BILINGUAL:
+            if not source_snapshot.has_inputs:
+                messagebox.showwarning("未选择字幕来源", "请先选择视频内字幕来源或多个外挂字幕文件。")
+                return
+            bilingual_options = self.build_bilingual_options()
+            package_mkv = self.bilingual_package_var.get()
+            reference_mode = self.bilingual_reference_mode_var.get()
+
+            def bilingual_job() -> str:
+                sources = resolve_input_snapshot(source_snapshot)
+                samples = resolve_input_snapshot(sample_snapshot)
+                if not sources:
+                    raise RuntimeError("字幕来源扫描后为空，请检查视频或外挂字幕文件。")
+                reference_text = None
+                if reference_mode == "参考文件优先" and samples:
+                    reference_parts: list[str] = []
+                    for sample in samples:
+                        reference_parts.extend(load_sample_style_texts(sample, log=self.log_frame.write))
+                    reference_text = merge_sample_texts(reference_parts)
+                    if not reference_text:
+                        self.log_frame.write("未读取到可用参考样式，将使用内置双语样式。")
+                outputs = build_bilingual_from_inputs(
+                    sources,
+                    output_dir,
+                    reference_text=reference_text,
+                    options=bilingual_options,
+                    log=self.log_frame.write,
+                )
+                if not package_mkv:
+                    self.log_frame.write("双语字幕已生成；未封装视频，原视频保持不变。")
+                    return f"双语字幕生成完成，生成 {len(outputs)} 个 ASS。"
+
+                mux_videos = resolve_input_snapshot(mux_snapshot)
+                if not mux_videos:
+                    mux_videos = [path for path in sources if is_video(path)]
+                if not mux_videos:
+                    raise RuntimeError("已要求封装 MKV，但没有找到目标视频。请在“目标视频”中选择视频。")
+                mux_outputs = mux_subtitles_into_videos(
+                    outputs,
+                    mux_videos,
+                    output_dir,
+                    replace_existing_subtitles=replace_existing,
+                    log=self.log_frame.write,
+                )
+                self.log_frame.write("双语字幕封装完成；源视频保持不变。")
+                for output in mux_outputs:
+                    self.log_frame.write(str(output))
+                return f"双语字幕生成并封装完成，生成 {len(mux_outputs)} 个 MKV。"
+
+            default_source = source_snapshot.files[0].parent if source_snapshot.files else source_snapshot.folders[0]
+            self.run_background(button, bilingual_job, output_dir=output_dir or default_source)
+            return
 
         if action == VIDEO_ACTION_REMOVE:
             if not mux_snapshot.has_inputs:

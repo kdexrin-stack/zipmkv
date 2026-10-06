@@ -55,4 +55,12 @@ FEATURES = [
         module="zh_convert.gui",
         nav_title="繁简文字转换",
     ),
+    FeatureSpec(
+        key="language_tools",
+        category="文字工具",
+        title="字幕语言识别与简繁双语",
+        description="识别单语字幕；中文单轨离线生成简体/繁体双语 ASS。",
+        module="language_tools.gui",
+        nav_title="字幕语言识别与双语",
+    ),
 ]
