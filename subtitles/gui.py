@@ -11,6 +11,7 @@ from common.gui_base import LogFrame, ToolFrame, bind_listbox_delete_menu
 from common.media_tools import describe_ffmpeg, probe_stream_lines, probe_subtitle_streams
 from common.paths import ensure_runtime_dirs
 from common.theme import COLORS
+from common.ui_components import SubtitleTimeline
 from common.zhconv import MODES, mode_key_from_label, mode_label
 
 from .core import (
@@ -28,6 +29,7 @@ from .core import (
     build_bilingual_from_inputs,
     load_sample_style_texts,
     merge_sample_texts,
+    read_subtitle_cues,
 )
 
 
@@ -85,7 +87,9 @@ class FeatureFrame(ToolFrame):
         self.shadow_var = tk.StringVar()
         self.status_var = tk.StringVar()
         self.preview_var = tk.StringVar(value="生成后显示 ASS/SSA 效果示例")
+        self.preview_cue_var = tk.StringVar(value="生成字幕后可点击时间轴查看实际事件")
         self.preview_image = None
+        self.preview_cues: list[tuple[str, str, str]] = []
         self.manual_widgets: list[tk.Widget] = []
         self.sample_widgets: list[tk.Widget] = []
         self.stream_spins: list[ttk.Spinbox] = []
@@ -527,9 +531,25 @@ class FeatureFrame(ToolFrame):
         self.log_frame.pack(fill=tk.BOTH, expand=True)
 
         preview_area = ttk.LabelFrame(result_panes, text="效果示例", padding=6)
+        preview_area.columnconfigure(0, weight=1)
+        preview_area.rowconfigure(0, weight=1)
         self.preview_label = ttk.Label(preview_area, text="暂无预览", anchor=tk.CENTER, width=36)
-        self.preview_label.pack(fill=tk.BOTH, expand=True)
-        ttk.Label(preview_area, textvariable=self.preview_var, wraplength=320, style="Muted.TLabel").pack(fill=tk.X)
+        self.preview_label.grid(row=0, column=0, sticky=tk.NSEW, pady=(0, 5))
+        self.preview_timeline = SubtitleTimeline(preview_area, self._select_preview_cue)
+        self.preview_timeline.grid(row=1, column=0, sticky=tk.EW, pady=(0, 5))
+        ttk.Label(
+            preview_area,
+            textvariable=self.preview_cue_var,
+            style="Task.TLabel",
+            wraplength=360,
+            justify=tk.LEFT,
+        ).grid(row=2, column=0, sticky=tk.EW, pady=(0, 3))
+        ttk.Label(
+            preview_area,
+            textvariable=self.preview_var,
+            wraplength=360,
+            style="Muted.TLabel",
+        ).grid(row=3, column=0, sticky=tk.EW)
         result_panes.add(log_area, weight=3)
         result_panes.add(preview_area, weight=1)
 
@@ -902,9 +922,18 @@ class FeatureFrame(ToolFrame):
         if not subtitle_output:
             self.preview_label.config(image="", text="暂无可预览字幕")
             self.preview_var.set("已生成文件，但没有可预览的字幕文件。")
+            self.preview_cue_var.set("没有可显示的字幕事件")
+            self.preview_cues = []
+            self.preview_timeline.set_cues([])
             self.preview_image = None
             return
         try:
+            self.preview_cues = read_subtitle_cues(subtitle_output)
+            self.preview_timeline.set_cues(self.preview_cues)
+            if self.preview_cues:
+                self.preview_cue_var.set(self._format_preview_cue(0))
+            else:
+                self.preview_cue_var.set("文件已生成，但没有解析到有效字幕事件")
             preview_path = ensure_runtime_dirs()["temp"] / "subtitle_preview.png"
             create_ass_preview_image(subtitle_output, preview_path)
             with Image.open(preview_path) as image:
@@ -913,12 +942,31 @@ class FeatureFrame(ToolFrame):
             self.preview_label.config(image=self.preview_image, text="")
             suffix = Path(subtitle_output).suffix.casefold()
             if suffix in {".srt", ".vtt", ".skrt"}:
-                self.preview_var.set(f"文本预览: {Path(subtitle_output).name}（该格式不保存字体/颜色/描边）")
+                self.preview_var.set(
+                    f"文本预览: {Path(subtitle_output).name} · {len(self.preview_cues)} 个事件"
+                    "（该格式不保存字体/颜色/描边）"
+                )
             else:
-                self.preview_var.set(f"样式预览: {Path(subtitle_output).name}")
+                self.preview_var.set(f"样式预览: {Path(subtitle_output).name} · {len(self.preview_cues)} 个事件")
         except Exception as exc:
             self.preview_label.config(image="", text="预览生成失败")
-            self.preview_var.set(str(exc))
+            self.preview_cue_var.set("字幕事件解析失败")
+            self.preview_timeline.set_cues([])
+            self.preview_var.set(f"{type(exc).__name__}: {exc}")
+
+    def _format_preview_cue(self, index: int) -> str:
+        if not self.preview_cues:
+            return "没有可显示的字幕事件"
+        start, end, text = self.preview_cues[index]
+        return f"#{index + 1}  {start} → {end}\n{text}"
+
+    def _select_preview_cue(self, index: int) -> None:
+        if not self.preview_cues:
+            return
+        index = max(0, min(index, len(self.preview_cues) - 1))
+        self.preview_timeline.selected = index
+        self.preview_timeline.redraw()
+        self.preview_cue_var.set(self._format_preview_cue(index))
 
     def build_options(self, remux_video: bool | None = None) -> StyleOptions:
         mode = self.style_mode_var.get()

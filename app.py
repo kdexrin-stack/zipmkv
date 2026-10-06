@@ -14,16 +14,23 @@ if str(PROJECT_ROOT) not in sys.path:
 from common.paths import ensure_runtime_dirs
 from common.theme import COLORS, FONT_FAMILY, apply_app_theme, enable_high_dpi_awareness
 from common.haruhi_theme import HARUHI_THEME
+from common.ui_components import Tooltip, decorate_buttons, icon_button, icon_image
 from features import FEATURES, FeatureSpec
 
-APP_VERSION = "1.3.0"
+APP_VERSION = "1.3.1"
+
+FEATURE_ICONS = {
+    "image_archive_pdf": "file-stack", "rename_files": "file-pen-line",
+    "subtitles": "captions", "xml_danmaku": "messages-square",
+    "zh_convert": "languages", "language_tools": "scan-text",
+}
 
 
 class ZipMkvApp(tk.Tk):
     def __init__(self):
         enable_high_dpi_awareness()
         super().__init__()
-        self.title("zipmkv 工具箱 · SOS团特别版")
+        self.title("zipmkv · 媒体与字幕工具箱")
         self.geometry("1240x760")
         self.minsize(1020, 640)
         ensure_runtime_dirs()
@@ -34,6 +41,8 @@ class ZipMkvApp(tk.Tk):
         self.current_feature: FeatureSpec | None = None
         self.feature_iids: dict[str, str] = {}
         self.feature_by_iid: dict[str, FeatureSpec] = {}
+        self.group_iids = {}
+        self.search_var = tk.StringVar()
         self.category_var = tk.StringVar()
         self.haruhi_btn_text = tk.StringVar(value=f"🌸 凉宫春日立绘: {HARUHI_THEME.status_label}")
         self.module_index_var = tk.StringVar()
@@ -80,7 +89,7 @@ class ZipMkvApp(tk.Tk):
         root = ttk.Frame(self, style="App.TFrame")
         root.pack(fill=tk.BOTH, expand=True)
 
-        sidebar = ttk.Frame(root, width=280, padding=(18, 20), style="Sidebar.TFrame")
+        sidebar = ttk.Frame(root, width=256, padding=(16, 18), style="Sidebar.TFrame")
         sidebar.pack(side=tk.LEFT, fill=tk.Y, padx=(0, 0))
         sidebar.pack_propagate(False)
 
@@ -91,11 +100,11 @@ class ZipMkvApp(tk.Tk):
         brand.pack(fill=tk.X, pady=(0, 18))
         tk.Label(
             brand,
-            text="Z",
+            image=icon_image(self, "archive", 26, "#ffffff"),
             bg=COLORS["primary"],
             fg="#ffffff",
-            width=2,
-            height=1,
+            padx=9,
+            pady=9,
             font=(FONT_FAMILY, 14, "bold"),
             bd=0,
         ).pack(side=tk.LEFT, padx=(0, 10))
@@ -104,7 +113,13 @@ class ZipMkvApp(tk.Tk):
         ttk.Label(brand_text, text="zipmkv", style="AppTitle.TLabel").pack(anchor=tk.W)
         ttk.Label(brand_text, text=f"DESKTOP v{APP_VERSION}", style="SidebarMuted.TLabel").pack(anchor=tk.W)
 
-        ttk.Label(sidebar, text="功能模块导航", style="SidebarSection.TLabel").pack(anchor=tk.W, pady=(0, 8))
+        search_row = ttk.Frame(sidebar, style="Sidebar.TFrame")
+        search_row.pack(fill=tk.X, pady=(0, 14))
+        ttk.Label(search_row, image=icon_image(self, "search", 18)).pack(side=tk.LEFT, padx=(0, 5))
+        search_entry = ttk.Entry(search_row, textvariable=self.search_var, width=16)
+        search_entry.pack(side=tk.LEFT, fill=tk.X, expand=True)
+        Tooltip(search_entry, "搜索模块")
+        self.search_var.trace_add("write", lambda *_args: self.filter_features())
 
         groups: dict[str, list[FeatureSpec]] = {}
         for feature in FEATURES:
@@ -119,14 +134,18 @@ class ZipMkvApp(tk.Tk):
             height=tree_height,
             takefocus=True,
         )
-        self.feature_tree.column("#0", width=238, stretch=True)
+        self.feature_tree.column("#0", width=218, stretch=True)
         self.feature_tree.pack(fill=tk.BOTH, expand=True)
         for group_index, (category, features) in enumerate(groups.items()):
             group_iid = f"group_{group_index}"
-            self.feature_tree.insert("", tk.END, iid=group_iid, text=f"▾ {category}", open=True, tags=("category",))
+            self.group_iids[category] = group_iid
+            self.feature_tree.insert("", tk.END, iid=group_iid, text=category, open=True, tags=("category",))
             for feature in features:
                 iid = f"feature_{feature.key}"
-                self.feature_tree.insert(group_iid, tk.END, iid=iid, text=f"  {feature.nav_title or feature.title}", tags=("feature",))
+                self.feature_tree.insert(
+                    group_iid, tk.END, iid=iid, text=f"  {feature.nav_title or feature.title}",
+                    image=icon_image(self, FEATURE_ICONS.get(feature.key, "archive"), 18), tags=("feature",),
+                )
                 self.feature_iids[feature.key] = iid
                 self.feature_by_iid[iid] = feature
         self.feature_tree.tag_configure(
@@ -140,25 +159,39 @@ class ZipMkvApp(tk.Tk):
         sidebar_footer = ttk.Frame(sidebar, style="Sidebar.TFrame")
         sidebar_footer.pack(side=tk.BOTTOM, fill=tk.X, pady=(12, 0))
         ttk.Separator(sidebar_footer).pack(fill=tk.X, pady=(0, 8))
-        ttk.Button(sidebar_footer, textvariable=self.haruhi_btn_text, command=self.cycle_haruhi_opacity, style="Sidebar.TButton").pack(fill=tk.X, pady=(0, 4))
-        ttk.Button(sidebar_footer, text="🖼️ 自定义春日图片", command=self.choose_custom_haruhi_image, style="Sidebar.TButton").pack(fill=tk.X, pady=(0, 4))
-        ttk.Button(sidebar_footer, text="打开运行目录", command=self.open_runtime_dir, style="Sidebar.TButton").pack(fill=tk.X)
-        ttk.Button(sidebar_footer, text="扩展模块指南", command=self.show_extension_help, style="Sidebar.TButton").pack(fill=tk.X, pady=(4, 0))
-        ttk.Label(sidebar_footer, text="SOS团 · 本地私有安全运行", style="SidebarMuted.TLabel").pack(anchor=tk.W, pady=(8, 0))
+        self.figure_slot = ttk.Frame(sidebar_footer, height=132, style="Sidebar.TFrame")
+        self.figure_slot.pack(fill=tk.X)
+        self.figure_slot.pack_propagate(False)
+        footer_tools = ttk.Frame(sidebar_footer)
+        footer_tools.pack(fill=tk.X, pady=(6, 8))
+        for name, command, label in (
+            ("settings-2", self.cycle_haruhi_opacity, "立绘显示强度"),
+            ("image", self.choose_custom_haruhi_image, "自定义侧栏图片"),
+            ("folder-open", self.open_runtime_dir, "运行目录"),
+            ("code-xml", self.show_extension_help, "扩展模块指南"),
+        ):
+            icon_button(footer_tools, name, command, label).pack(side=tk.LEFT, padx=2)
+        ttk.Label(sidebar_footer, text="离线处理 · 默认保留源文件", style="SidebarMuted.TLabel").pack(anchor=tk.W)
 
         content_shell = ttk.Frame(root, padding=(16, 12), style="App.TFrame")
         content_shell.pack(side=tk.RIGHT, fill=tk.BOTH, expand=True)
 
         self.header = ttk.Frame(content_shell, style="Header.TFrame", padding=(14, 8))
         self.header.pack(fill=tk.X, pady=(0, 8))
-        tk.Frame(self.header, width=4, bg=COLORS["primary"]).pack(side=tk.LEFT, fill=tk.Y, padx=(0, 12))
+        self.feature_icon = tk.Label(self.header, bg=COLORS["primary_soft"], padx=10, pady=10)
+        self.feature_icon.pack(side=tk.LEFT, padx=(0, 12))
         header_text = ttk.Frame(self.header, style="Header.TFrame")
         header_text.pack(side=tk.LEFT, fill=tk.X, expand=True)
         self.page_title_var = tk.StringVar()
         self.page_desc_var = tk.StringVar()
         ttk.Label(header_text, textvariable=self.category_var, style="Eyebrow.TLabel").pack(anchor=tk.W)
         ttk.Label(header_text, textvariable=self.page_title_var, style="PageTitle.TLabel").pack(anchor=tk.W, pady=(1, 0))
-        ttk.Label(header_text, textvariable=self.page_desc_var, style="Muted.TLabel").pack(anchor=tk.W, pady=(2, 0))
+        ttk.Label(
+            header_text,
+            textvariable=self.page_desc_var,
+            style="Muted.TLabel",
+            wraplength=720,
+        ).pack(anchor=tk.W, pady=(2, 0))
         
         index_badge = tk.Label(
             self.header,
@@ -174,9 +207,12 @@ class ZipMkvApp(tk.Tk):
 
         status = ttk.Frame(content_shell, style="Status.TFrame", padding=(12, 6))
         status.pack(side=tk.BOTTOM, fill=tk.X, pady=(6, 0))
-        tk.Frame(status, width=8, height=8, bg=COLORS["success"]).pack(side=tk.LEFT, padx=(0, 8))
-        ttk.Label(status, textvariable=self.status_var, style="Status.TLabel").pack(side=tk.LEFT)
-        ttk.Label(status, text="快捷键: Ctrl+Enter 执行 · Ctrl+E 输出 · Ctrl+L 清空日志", style="Status.TLabel").pack(side=tk.RIGHT)
+        self.status_dot = tk.Frame(status, width=8, height=8, bg=COLORS["success"])
+        self.status_dot.pack(side=tk.LEFT, padx=(0, 8))
+        self.status_label = ttk.Label(status, textvariable=self.status_var, style="Status.TLabel", wraplength=650)
+        self.status_label.pack(side=tk.LEFT, fill=tk.X, expand=True)
+        self.task_progress = ttk.Progressbar(status, mode="determinate", maximum=100, length=105)
+        self.task_progress.pack(side=tk.RIGHT, padx=(8, 0))
 
         self.content = ttk.Frame(content_shell, padding=0, style="Workspace.TFrame")
         self.content.pack(fill=tk.BOTH, expand=True)
@@ -199,16 +235,9 @@ class ZipMkvApp(tk.Tk):
         )
         self.content_window: int | None = None
 
-        self.haruhi_watermark_label = tk.Label(self.content, bg=COLORS["surface"], bd=0, cursor="hand2")
+        self.haruhi_watermark_label = tk.Label(self.figure_slot, bg=COLORS["sidebar"], bd=0, cursor="hand2")
         self.haruhi_watermark_label.bind("<Button-1>", lambda _e: self.cycle_haruhi_opacity())
-        self.haruhi_watermark_label.bind(
-            "<Enter>",
-            lambda _e: self.status_var.set(f"🌸 凉宫春日立绘 ({HARUHI_THEME.status_label}) · 点击切换透明度 · 团长正在注视你的工作！"),
-        )
-        self.haruhi_watermark_label.bind(
-            "<Leave>",
-            lambda _e: self.status_var.set(f"{self.current_feature.title if self.current_feature else 'zipmkv'} · 就绪"),
-        )
+        Tooltip(self.haruhi_watermark_label, "切换侧栏图片强度")
         self._haruhi_debounce_id: str | None = None
 
         # Global shortcuts
@@ -220,7 +249,7 @@ class ZipMkvApp(tk.Tk):
         self.bind_all("<Control-L>", lambda _e: self._trigger_clear_log())
 
     def _trigger_primary_action(self) -> None:
-        if not self.current_frame:
+        if not self.current_frame or getattr(self, "_active_tool", None) is not None:
             return
         for attr in ("primary_action_button", "start_button"):
             btn = getattr(self.current_frame, attr, None)
@@ -271,17 +300,12 @@ class ZipMkvApp(tk.Tk):
         if not HARUHI_THEME.enabled:
             self.haruhi_watermark_label.place_forget()
             return
-        h = self.content.winfo_height()
-        if h < 100:
-            h = 500
-        raw_height = max(180, min(380, int(h * 0.52)))
-        target_height = (raw_height // 30) * 30
+        target_height = 130
         img = HARUHI_THEME.get_blended_figure(target_height, COLORS["surface"])
         if img:
             self.haruhi_watermark_label.configure(image=img)
             self.haruhi_watermark_label.image = img
-            self.haruhi_watermark_label.place(relx=1.0, rely=1.0, anchor="se", x=-16, y=-16)
-            self.haruhi_watermark_label.lift()
+            self.haruhi_watermark_label.place(relx=0.5, rely=1.0, anchor="s")
         else:
             self.haruhi_watermark_label.place_forget()
 
@@ -296,6 +320,33 @@ class ZipMkvApp(tk.Tk):
             return
         self.load_feature(feature)
 
+    def filter_features(self) -> None:
+        if not hasattr(self, "feature_tree"):
+            return
+        query = self.search_var.get().strip().casefold()
+        for category, group_iid in self.group_iids.items():
+            visible = [feature for feature in FEATURES if feature.category == category and query in
+                       f"{feature.title} {feature.nav_title or ''} {feature.description} {feature.key}".casefold()]
+            self.feature_tree.move(group_iid, "", tk.END)
+            for feature in FEATURES:
+                if feature.category == category:
+                    iid = self.feature_iids[feature.key]
+                    if feature in visible:
+                        self.feature_tree.move(iid, group_iid, tk.END)
+                    else:
+                        self.feature_tree.detach(iid)
+            if not visible:
+                self.feature_tree.detach(group_iid)
+
+    def set_task_state(self, state: str) -> None:
+        self.task_progress.stop()
+        self.status_dot.configure(bg=COLORS["error"] if state == "error" else COLORS["primary"] if state == "running" else COLORS["success"])
+        if state == "running":
+            self.task_progress.configure(mode="indeterminate")
+            self.task_progress.start(20)
+        else:
+            self.task_progress.configure(mode="determinate", value=100 if state == "success" else 0)
+
     def load_feature(self, feature: FeatureSpec) -> None:
         if self.current_feature == feature and self.current_frame is not None:
             return
@@ -305,6 +356,7 @@ class ZipMkvApp(tk.Tk):
                 module = importlib.import_module(feature.module)
                 frame_class = getattr(module, feature.frame_class)
                 frame = frame_class(self.content_canvas)
+                decorate_buttons(frame)
                 self._loaded_frames[feature.key] = frame
             except Exception as exc:
                 messagebox.showerror("加载失败", f"{feature.title} 加载失败:\n{exc}")
@@ -321,9 +373,10 @@ class ZipMkvApp(tk.Tk):
         feature_index = FEATURES.index(feature) + 1
         self.category_var.set(feature.category.upper())
         self.page_title_var.set(feature.title)
+        self.feature_icon.configure(image=icon_image(self, FEATURE_ICONS.get(feature.key, "archive"), 26))
         self.page_desc_var.set(feature.description)
         self.module_index_var.set(f"{feature_index:02d} / {len(FEATURES):02d}")
-        self.status_var.set(f"{feature.title} · 就绪")
+        self.status_var.set(f"{feature.title} · {'处理中' if getattr(frame, '_busy', False) else '就绪'}")
         iid = self.feature_iids[feature.key]
         self.feature_tree.selection_set(iid)
         self.feature_tree.focus(iid)
@@ -338,7 +391,7 @@ class ZipMkvApp(tk.Tk):
     def _layout_content_window(self) -> None:
         if self.current_frame is None or self.content_window is None:
             return
-        width = max(self.content_canvas.winfo_width(), 900)
+        width = max(self.content_canvas.winfo_width(), 740)
         self.content_canvas.itemconfigure(self.content_window, width=width)
         height = max(self.content_canvas.winfo_height(), self.current_frame.winfo_reqheight())
         self.content_canvas.itemconfigure(self.content_window, height=height)

@@ -6,6 +6,7 @@ from pathlib import Path
 import queue
 import subprocess
 import threading
+import time
 import tkinter as tk
 from tkinter import messagebox, scrolledtext, ttk
 
@@ -20,6 +21,16 @@ class LogFrame(ttk.Frame):
     def __init__(self, master, height: int = 5, max_lines: int = 2500):
         super().__init__(master, style="Surface.TFrame")
         self.max_lines = max_lines
+        self.phase_var = tk.StringVar(value="就绪")
+        self.elapsed_var = tk.StringVar(value="")
+        task_bar = ttk.Frame(self)
+        task_bar.pack(fill=tk.X, pady=(0, 6))
+        self.phase_label = ttk.Label(task_bar, textvariable=self.phase_var, style="Task.TLabel")
+        self.phase_label.pack(side=tk.LEFT)
+        ttk.Label(task_bar, textvariable=self.elapsed_var, style="TaskMuted.TLabel").pack(side=tk.RIGHT)
+        self.progress = ttk.Progressbar(task_bar, length=100, mode="determinate", maximum=100)
+        self.progress.pack(side=tk.RIGHT, padx=10)
+        self._task_started = None
         self.text = scrolledtext.ScrolledText(self, height=height, wrap=tk.WORD)
         self.text.configure(
             bg=COLORS["console"],
@@ -37,9 +48,12 @@ class LogFrame(ttk.Frame):
             pady=8,
         )
         self.text.pack(fill=tk.BOTH, expand=True)
+        for tag, color in (("error", COLORS["error"]), ("warning", COLORS["warning"]), ("success", "#087b64"), ("info", COLORS["primary"])):
+            self.text.tag_configure(tag, foreground=color)
         self._pending: queue.Queue[str] = queue.Queue()
         self._drain_after_id: str | None = None
         self.bind("<Destroy>", self._cancel_drain, add="+")
+        self._schedule_drain()
 
     def _cancel_drain(self, event=None) -> None:
         if event is not None and event.widget is not self:
@@ -52,7 +66,8 @@ class LogFrame(ttk.Frame):
             self._drain_after_id = None
 
     def _append(self, text: str) -> None:
-        self.text.insert(tk.END, text + "\n")
+        tag = self._message_tag(text)
+        self.text.insert(tk.END, text + "\n", tag)
         self._enforce_line_limit()
         self.text.see(tk.END)
 
@@ -68,7 +83,7 @@ class LogFrame(ttk.Frame):
     def _schedule_drain(self) -> None:
         if self._drain_after_id is None:
             try:
-                self._drain_after_id = self.after(20, self._drain_pending)
+                self._drain_after_id = self.after(75, self._drain_pending)
             except tk.TclError:
                 pass
 
@@ -81,14 +96,37 @@ class LogFrame(ttk.Frame):
         except queue.Empty:
             pass
         if lines:
-            self.text.insert(tk.END, "\n".join(lines) + "\n")
+            for line in lines:
+                self.text.insert(tk.END, line + "\n", self._message_tag(line))
             self._enforce_line_limit()
             self.text.see(tk.END)
-        if not self._pending.empty():
-            try:
-                self._drain_after_id = self.after(20, self._drain_pending)
-            except tk.TclError:
-                pass
+        if self._task_started is not None:
+            self.elapsed_var.set(f"{time.monotonic() - self._task_started:.1f}s")
+        self._schedule_drain()
+
+    @staticmethod
+    def _message_tag(text: str) -> str:
+        if any(word in text.casefold() for word in ("失败", "异常", "error", "traceback")):
+            return "error"
+        if any(word in text for word in ("提示", "跳过", "警告", "未找到")):
+            return "warning"
+        if any(word in text for word in ("完成", "已输出", "成功", "已封装")):
+            return "success"
+        return "info" if text.startswith("[") else ""
+
+    def start_task(self) -> None:
+        self._task_started = time.monotonic()
+        self.phase_var.set("处理中")
+        self.progress.configure(mode="indeterminate")
+        self.progress.start(20)
+
+    def finish_task(self, succeeded: bool) -> None:
+        self.progress.stop()
+        self.progress.configure(mode="determinate", value=100 if succeeded else 0)
+        self.phase_var.set("已完成" if succeeded else "处理失败")
+        if self._task_started is not None:
+            self.elapsed_var.set(f"{time.monotonic() - self._task_started:.1f}s")
+        self._task_started = None
 
     def write(self, message: str) -> None:
         text = str(message).rstrip()
@@ -99,9 +137,13 @@ class LogFrame(ttk.Frame):
             self._append(text)
         else:
             self._pending.put(text)
-            self._schedule_drain()
 
     def clear(self) -> None:
+        while not self._pending.empty():
+            try:
+                self._pending.get_nowait()
+            except queue.Empty:
+                break
         self.text.delete("1.0", tk.END)
 
 
@@ -223,11 +265,18 @@ class FileListCard(ttk.LabelFrame):
         ttk.Button(button_row, text="清空", command=self.clear).pack(side=tk.LEFT)
 
         self.listbox = tk.Listbox(self, height=height, exportselection=False)
-        self.listbox.pack(fill=tk.BOTH, expand=True, pady=2)
+        list_area = ttk.Frame(self)
+        list_area.pack(fill=tk.BOTH, expand=True, pady=2)
+        scrollbar = ttk.Scrollbar(list_area, orient=tk.VERTICAL, command=self.listbox.yview)
+        scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
+        self.listbox.configure(yscrollcommand=scrollbar.set)
+        self.listbox.pack(in_=list_area, fill=tk.BOTH, expand=True)
         bind_listbox_delete_menu(self.listbox, self.delete_selected, self.clear)
 
         self.summary_label = ttk.Label(self, textvariable=self.summary_var, style="Badge.TLabel")
         self.summary_label.pack(anchor=tk.W, pady=(2, 0))
+        from .ui_components import decorate_buttons
+        decorate_buttons(self)
 
     def choose_files(self) -> None:
         from tkinter import filedialog
@@ -274,7 +323,9 @@ class ToolFrame(ttk.Frame):
         self.last_output_dir: Path | None = None
         self._ui_pending: queue.Queue[object] = queue.Queue()
         self._ui_after_id: str | None = None
+        self._busy = False
         self.bind("<Destroy>", self._cancel_ui_drain, add="+")
+        self._schedule_ui_drain()
 
     def _cancel_ui_drain(self, event=None) -> None:
         if event is not None and event.widget is not self:
@@ -289,7 +340,7 @@ class ToolFrame(ttk.Frame):
     def _schedule_ui_drain(self) -> None:
         if self._ui_after_id is None:
             try:
-                self._ui_after_id = self.after(20, self._drain_ui_pending)
+                self._ui_after_id = self.after(75, self._drain_ui_pending)
             except tk.TclError:
                 pass
 
@@ -303,18 +354,13 @@ class ToolFrame(ttk.Frame):
             pass
         except tk.TclError:
             return
-        if not self._ui_pending.empty():
-            try:
-                self._ui_after_id = self.after(20, self._drain_ui_pending)
-            except tk.TclError:
-                pass
+        self._schedule_ui_drain()
 
     def call_in_ui(self, callback) -> None:
         if threading.current_thread() is threading.main_thread():
             callback()
         else:
             self._ui_pending.put(callback)
-            self._schedule_ui_drain()
 
     def reveal_output_folder(self) -> None:
         if self.last_output_dir:
@@ -327,31 +373,49 @@ class ToolFrame(ttk.Frame):
         done_message: str = "处理完成",
         output_dir: str | Path | None = None,
     ) -> None:
+        top = self.winfo_toplevel()
+        if self._busy or getattr(top, "_active_tool", None) is not None:
+            self.log_frame.write("提示：已有任务正在处理，请等待完成后再执行。")
+            return
+        self._busy = True
+        top._active_tool = self
         button.config(state=tk.DISABLED)
-        self._set_app_status("⏳ 正在处理中，请稍候...")
+        self.log_frame.start_task()
+        self.log_frame.write("开始处理...")
+        self._set_app_status("正在处理")
+        task_indicator = getattr(top, "set_task_state", None)
+        if task_indicator:
+            task_indicator("running")
         if output_dir:
             self.last_output_dir = Path(output_dir)
-        import time
-
         def worker():
-            start_time = time.time()
+            start_time = time.monotonic()
+            succeeded = False
             try:
                 stream = _LogStream(self.log_frame.write)
                 with contextlib.redirect_stdout(stream), contextlib.redirect_stderr(stream):
                     raw_msg = job()
                     message = raw_msg or done_message
                 stream.flush()
-                elapsed = time.time() - start_time
-                status_msg = f"✓ {message} · 耗时 {elapsed:.1f}s"
+                elapsed = time.monotonic() - start_time
+                status_msg = f"{message} · 耗时 {elapsed:.1f}s"
+                succeeded = True
+                self.log_frame.write(status_msg)
                 self.call_in_ui(lambda: self._set_app_status(status_msg))
-                self.call_in_ui(lambda: messagebox.showinfo("完成", status_msg))
             except Exception as exc:
                 error_message = str(exc)
                 self.log_frame.write(f"任务执行失败: {error_message}")
-                self.call_in_ui(lambda: self._set_app_status("✕ 处理失败，请查看下方日志"))
+                self.call_in_ui(lambda: self._set_app_status("处理失败，请查看日志"))
                 self.call_in_ui(lambda value=error_message: messagebox.showerror("错误", value))
             finally:
-                self.call_in_ui(lambda: button.config(state=tk.NORMAL))
+                def complete(ok=succeeded):
+                    self._busy = False
+                    top._active_tool = None
+                    self.log_frame.finish_task(ok)
+                    button.config(state=tk.NORMAL)
+                    if task_indicator:
+                        task_indicator("success" if ok else "error")
+                self.call_in_ui(complete)
 
         threading.Thread(target=worker, daemon=True).start()
 

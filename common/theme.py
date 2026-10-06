@@ -9,38 +9,40 @@ from tkinter import ttk
 
 COLORS = {
     # Main background & surfaces (Porcelain & Crisp Clean White)
-    "bg": "#f8fafc",
+    "bg": "#f2f8ff",
     "surface": "#ffffff",
-    "surface_muted": "#f1f5f9",
-    "surface_strong": "#e2e8f0",
-    "border": "#e2e8f0",
+    "surface_muted": "#f2f7fc",
+    "surface_strong": "#dcecf9",
+    "border": "#d8e6f2",
     "border_light": "#f1f5f9",
     # Text
-    "text": "#0f172a",
-    "muted": "#64748b",
+    "text": "#203c52",
+    "muted": "#5c7488",
     "muted_light": "#94a3b8",
     # Primary & Accents (Sapphire Blue - Clean, Fluid & Professional)
-    "primary": "#2563eb",
-    "primary_hover": "#1d4ed8",
-    "primary_active": "#1e40af",
-    "primary_soft": "#eff6ff",
-    "primary_soft_border": "#dbeafe",
+    "primary": "#007dc9",
+    "primary_hover": "#0068ab",
+    "primary_active": "#00558e",
+    "primary_soft": "#eaf5ff",
+    "primary_soft_border": "#c5e5fa",
     "accent": "#f43f5e",
     "bell": "#f59e0b",
     "success": "#10b981",
+    "error": "#c44356",
+    "warning": "#a66d10",
     "selection": "#eff6ff",
     "hover": "#f8fafc",
     # Sidebar (Light, Airy & Modern)
     "sidebar": "#ffffff",
-    "sidebar_surface": "#f8fafc",
+    "sidebar_surface": "#f0f8ff",
     "sidebar_hover": "#f1f5f9",
     "sidebar_active": "#2563eb",
-    "sidebar_text": "#0f172a",
+    "sidebar_text": "#203c52",
     "sidebar_muted": "#64748b",
     "sidebar_border": "#e2e8f0",
     # Console / Log (Porcelain Terminal)
-    "console": "#f8fafc",
-    "console_text": "#0f172a",
+    "console": "#f7fbff",
+    "console_text": "#203c52",
     "console_border": "#e2e8f0",
 }
 
@@ -106,6 +108,7 @@ def _configure_checkbox_indicator(root: tk.Misc, style: ttk.Style) -> None:
 
     unchecked = square(COLORS["surface"], COLORS["border"])
     checked = square(COLORS["primary"], COLORS["primary"])
+    disabled = square(COLORS["surface_strong"], COLORS["border"])
     for x, y in ((4, 8), (5, 9), (6, 10), (7, 11), (8, 10), (9, 9), (10, 8), (11, 7), (12, 6), (13, 5)):
         checked.put("#ffffff", to=(x, y, x + 2, y + 2))
 
@@ -114,6 +117,7 @@ def _configure_checkbox_indicator(root: tk.Misc, style: ttk.Style) -> None:
             "Zipmkv.Checkbutton.indicator",
             "image",
             unchecked,
+            ("disabled", disabled),
             ("selected", checked),
             sticky="",
         )
@@ -139,7 +143,7 @@ def _configure_checkbox_indicator(root: tk.Misc, style: ttk.Style) -> None:
                 )
             ],
         )
-        root._zipmkv_checkbox_images = (unchecked, checked)
+        root._zipmkv_checkbox_images = (unchecked, checked, disabled)
     except tk.TclError:
         pass
 
@@ -171,6 +175,9 @@ def apply_app_theme(root: tk.Misc | None = None) -> ttk.Style:
     style.configure("TLabel", background=COLORS["surface"], foreground=COLORS["text"])
     style.configure("Surface.TLabel", background=COLORS["surface"], foreground=COLORS["text"])
     style.configure("Sidebar.TLabel", background=COLORS["sidebar"], foreground=COLORS["sidebar_text"])
+    style.configure("Tooltip.TLabel", background=COLORS["primary_soft"], foreground=COLORS["text"], font=(FONT_FAMILY, 9))
+    style.configure("Task.TLabel", background=COLORS["console"], foreground=COLORS["primary"], font=(FONT_FAMILY, 9, "bold"))
+    style.configure("TaskMuted.TLabel", background=COLORS["console"], foreground=COLORS["muted"], font=(FONT_FAMILY, 9))
     style.configure("Muted.TLabel", background=COLORS["surface"], foreground=COLORS["muted"])
     style.configure("SidebarMuted.TLabel", background=COLORS["sidebar"], foreground=COLORS["sidebar_muted"])
     style.configure("Status.TLabel", background=COLORS["surface_muted"], foreground=COLORS["muted"], font=(FONT_FAMILY, 9))
@@ -186,7 +193,7 @@ def apply_app_theme(root: tk.Misc | None = None) -> ttk.Style:
     style.configure("PageTitle.TLabel", background=COLORS["surface"], foreground=COLORS["text"], font=(FONT_FAMILY, 17, "bold"))
     style.configure(
         "TButton",
-        padding=(13, 7),
+        padding=(10, 6),
         borderwidth=1,
         relief=tk.FLAT,
         background=COLORS["surface"],
@@ -203,6 +210,7 @@ def apply_app_theme(root: tk.Misc | None = None) -> ttk.Style:
         font=(FONT_FAMILY, BASE_FONT_SIZE, "bold"),
         focuscolor=COLORS["primary"],
     )
+    style.configure("Icon.TButton", padding=(7, 6), borderwidth=0, relief=tk.FLAT, background=COLORS["surface"])
     style.configure(
         "Sidebar.TButton",
         padding=(12, 7),
@@ -257,10 +265,10 @@ def apply_app_theme(root: tk.Misc | None = None) -> ttk.Style:
         foreground=[("selected", COLORS["primary_hover"]), ("!selected", COLORS["sidebar_text"])],
     )
     style.configure("Feature.TNotebook", background=COLORS["surface"], borderwidth=0, tabmargins=(0, 0, 0, 0))
-    style.configure("Feature.TNotebook.Tab", padding=(18, 10), font=(FONT_FAMILY, BASE_FONT_SIZE, "bold"), background=COLORS["surface_muted"], borderwidth=0)
+    style.configure("Feature.TNotebook.Tab", padding=(18, 8), font=(FONT_FAMILY, BASE_FONT_SIZE, "bold"), background=COLORS["surface_muted"], borderwidth=0)
     style.map(
         "Feature.TNotebook.Tab",
-        background=[("selected", COLORS["surface"]), ("active", COLORS["hover"])],
+        background=[("selected", COLORS["primary_soft"]), ("active", COLORS["hover"])],
         foreground=[("selected", COLORS["primary"])],
     )
     style.configure("TLabelframe", background=COLORS["surface"], bordercolor=COLORS["border"], lightcolor=COLORS["border"], darkcolor=COLORS["border"], borderwidth=1, relief=tk.SOLID)
@@ -326,6 +334,8 @@ def apply_app_theme(root: tk.Misc | None = None) -> ttk.Style:
         foreground=[("readonly", COLORS["text"]), ("disabled", COLORS["muted"])],
     )
     style.map("TEntry", bordercolor=[("focus", COLORS["primary"])])
+    style.map("TCheckbutton", foreground=[("disabled", COLORS["muted_light"])])
+    style.map("TRadiobutton", foreground=[("disabled", COLORS["muted_light"])])
     if root is not None:
         _configure_checkbox_indicator(root, style)
     return style
