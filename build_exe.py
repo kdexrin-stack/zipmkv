@@ -5,6 +5,7 @@ import shutil
 import subprocess
 import sys
 import tempfile
+import time
 from pathlib import Path
 
 
@@ -140,8 +141,11 @@ def build_exe() -> Path:
             with DIST_EXE.open("ab"):
                 pass
     except PermissionError:
-        build_name = "zipmkv_new"
-        print("zipmkv.exe is currently in use; building zipmkv_new.exe instead.")
+        # The running copy cannot be overwritten on Windows. Build into a
+        # staging name, validate it, then install it back to the canonical
+        # zipmkv.exe after the old process releases its file handle.
+        build_name = "zipmkv_update"
+        print("zipmkv.exe is currently in use; building a temporary update package.")
 
     args = [
         sys.executable,
@@ -202,6 +206,84 @@ def build_exe() -> Path:
     return output_exe
 
 
+def _can_open_for_replace(path: Path) -> bool:
+    if not path.exists():
+        return True
+    try:
+        with path.open("ab"):
+            return True
+    except PermissionError:
+        return False
+
+
+def install_canonical_exe(staged_exe: Path, wait_seconds: int = 120) -> Path:
+    """Install one canonical EXE; never leave versioned desktop launchers."""
+    if staged_exe.resolve() == DIST_EXE.resolve():
+        return DIST_EXE
+
+    print(f"Waiting for the running zipmkv.exe to close (up to {wait_seconds}s)...")
+    deadline = time.monotonic() + max(0, wait_seconds)
+    while not _can_open_for_replace(DIST_EXE):
+        if time.monotonic() >= deadline:
+            raise SystemExit(
+                "Cannot replace dist/zipmkv.exe because it is still running. "
+                "Close zipmkv and run build_exe.py again; no versioned EXE is installed."
+            )
+        time.sleep(2)
+
+    os.replace(staged_exe, DIST_EXE)
+    print(f"INSTALLED: {DIST_EXE}")
+    return DIST_EXE
+
+
+def update_desktop_shortcut(target: Path) -> None:
+    """Update the existing zipmkv desktop shortcut, or create it once."""
+    if os.name != "nt":
+        return
+    env = os.environ.copy()
+    env["ZIPMKV_SHORTCUT_TARGET"] = str(target.resolve())
+    script = r'''
+$desktop = [Environment]::GetFolderPath('Desktop')
+$target = [IO.Path]::GetFullPath($env:ZIPMKV_SHORTCUT_TARGET)
+$shortcutPath = $null
+$shell = New-Object -ComObject WScript.Shell
+foreach ($candidate in Get-ChildItem -LiteralPath $desktop -Filter '*.lnk' -File -ErrorAction SilentlyContinue) {
+    if ($candidate.BaseName -match '^zipmkv') {
+        $shortcutPath = $candidate.FullName
+        break
+    }
+    try {
+        $candidateShortcut = $shell.CreateShortcut($candidate.FullName)
+        if ([string]::Equals($candidateShortcut.TargetPath, $target, [StringComparison]::OrdinalIgnoreCase)) {
+            $shortcutPath = $candidate.FullName
+            break
+        }
+    } catch {}
+}
+if (-not $shortcutPath) {
+    $shortcutPath = Join-Path $desktop 'zipmkv.exe.lnk'
+}
+$shortcut = $shell.CreateShortcut($shortcutPath)
+$shortcut.TargetPath = $target
+$shortcut.WorkingDirectory = Split-Path -Parent $target
+$shortcut.IconLocation = "$target,0"
+$shortcut.Description = 'zipmkv 离线媒体与字幕工具箱'
+$shortcut.Save()
+'''
+    try:
+        subprocess.run(
+            ["powershell", "-NoProfile", "-ExecutionPolicy", "Bypass", "-Command", script],
+            check=True,
+            env=env,
+            capture_output=True,
+            text=True,
+            timeout=20,
+        )
+        print("DESKTOP SHORTCUT UPDATED")
+    except (OSError, subprocess.SubprocessError) as exc:
+        print(f"Warning: desktop shortcut was not updated: {exc}")
+
+
 def probe_built_exe(executable: Path) -> None:
     with tempfile.TemporaryDirectory(prefix="exe_probe_", dir=ROOT / "temp") as probe_value:
         probe_dir = Path(probe_value)
@@ -254,8 +336,10 @@ def main() -> None:
     ensure_vendor_ffmpeg()
     ensure_vendor_ffmpeg_archive()
     smoke_test()
-    output_exe = build_exe()
-    probe_built_exe(output_exe)
+    staged_exe = build_exe()
+    probe_built_exe(staged_exe)
+    output_exe = install_canonical_exe(staged_exe)
+    update_desktop_shortcut(output_exe)
 
 
 if __name__ == "__main__":
