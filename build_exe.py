@@ -225,6 +225,7 @@ def install_canonical_exe(staged_exe: Path, wait_seconds: int = 120) -> Path:
     deadline = time.monotonic() + max(0, wait_seconds)
     while not _can_open_for_replace(DIST_EXE):
         if time.monotonic() >= deadline:
+            staged_exe.unlink(missing_ok=True)
             raise SystemExit(
                 "Cannot replace dist/zipmkv.exe because it is still running. "
                 "Close zipmkv and run build_exe.py again; no versioned EXE is installed."
