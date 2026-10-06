@@ -611,6 +611,52 @@ def match_bilingual_cues(
     return merged, matched, len(remaining)
 
 
+def _style_name_has_any(style: dict[str, str], markers: tuple[str, ...]) -> bool:
+    name = str(style.get("Name", "")).casefold().replace("_", " ")
+    return any(marker in name for marker in markers)
+
+
+def _pick_reference_style(
+    styles: list[dict[str, str]],
+    counts: dict[str, int],
+    language_markers: tuple[str, ...] = (),
+    excluded: set[str] | None = None,
+) -> dict[str, str] | None:
+    """Pick a dialogue style instead of accidentally using a title/OP style."""
+    excluded = excluded or set()
+    available = [
+        style for style in styles
+        if str(style.get("Name", "")) not in excluded
+    ]
+    if not available:
+        return None
+
+    # Full reference ASS files often contain title cards, screen text and OP/ED
+    # styles with much higher usage counts than the actual dialogue. Prefer
+    # explicitly named dialogue styles before comparing usage counts.
+    dialogue = [
+        style for style in available
+        if _style_name_has_any(style, ("dialog", "dial", "subtitle", "sub"))
+    ]
+    if dialogue:
+        available = dialogue
+
+    if language_markers:
+        language = [style for style in available if _style_name_has_any(style, language_markers)]
+        if language:
+            available = language
+        else:
+            return None
+
+    return max(
+        available,
+        key=lambda style: (
+            counts.get(str(style.get("Name", "")), 0),
+            0 if _style_name_has_any(style, ("top", "bottom")) else 1,
+        ),
+    )
+
+
 def _sample_bilingual_styles(reference_text: str | None) -> tuple[dict[str, str], dict[str, str], dict[str, str]]:
     primary = dict(DEFAULT_ASS_STYLE)
     secondary = dict(DEFAULT_ASS_STYLE)
@@ -619,13 +665,27 @@ def _sample_bilingual_styles(reference_text: str | None) -> tuple[dict[str, str]
         _, styles = parse_ass_styles(reference_text)
         if styles:
             counts = ass_style_usage_counts(reference_text)
-            ranked = sorted(
+            primary_style = _pick_reference_style(
                 styles,
-                key=lambda style: counts.get(style.get("Name", ""), 0),
-                reverse=True,
+                counts,
+                ("cn", "chs", "zh", "chinese", "简", "汉"),
             )
-            primary.update(ranked[0])
-            secondary.update(ranked[1] if len(ranked) > 1 else ranked[0])
+            if primary_style is None:
+                primary_style = _pick_reference_style(styles, counts)
+            if primary_style:
+                primary.update(primary_style)
+
+            excluded = {str(primary_style.get("Name", ""))} if primary_style else set()
+            secondary_style = _pick_reference_style(
+                styles,
+                counts,
+                ("jp", "jpn", "ja", "japanese", "日"),
+                excluded=excluded,
+            )
+            if secondary_style is None:
+                secondary_style = primary_style or _pick_reference_style(styles, counts, excluded=excluded)
+            if secondary_style:
+                secondary.update(secondary_style)
     return primary, secondary, script_info
 
 
@@ -740,6 +800,26 @@ def load_bilingual_tracks(
     return tracks
 
 
+def _preferred_video_bilingual_pair(
+    tracks: list[SubtitleTrack],
+) -> tuple[SubtitleTrack, SubtitleTrack, list[SubtitleTrack]] | None:
+    """Prefer one Chinese/Japanese dialogue pair when a video has many tracks."""
+    detected = [(track, detect_cues_language(list(track.cues))) for track in tracks]
+    chinese = [item for item in detected if item[1].code in {"zh-Hans", "zh-Hant"}]
+    japanese = [item for item in detected if item[1].code == "ja"]
+    if not chinese or not japanese:
+        return None
+
+    # Simplified Chinese is the default primary track; otherwise use the first
+    # traditional Chinese track. Keep the first Japanese track as the lower
+    # line and do not accidentally pair two Chinese variants together.
+    primary = next((item for item in chinese if item[1].code == "zh-Hans"), chinese[0])
+    secondary = japanese[0]
+    selected = {id(primary[0]), id(secondary[0])}
+    ignored = [track for track, _language in detected if id(track) not in selected]
+    return primary[0], secondary[0], ignored
+
+
 def build_bilingual_from_inputs(
     paths: list[str | Path],
     output_dir: str | Path | None,
@@ -766,6 +846,17 @@ def build_bilingual_from_inputs(
     jobs: list[tuple[SubtitleTrack, SubtitleTrack | None, str]] = []
     standalone_index = 0
     for video_path, video_tracks in grouped.items():
+        preferred = _preferred_video_bilingual_pair(video_tracks)
+        if preferred:
+            first, second, ignored = preferred
+            jobs.append((first, second, video_path.stem))
+            if ignored:
+                emit(
+                    log,
+                    f"{video_path.name} 检测到 {len(video_tracks)} 条字幕轨；"
+                    f"已选择简体/中文主轨 + 日文轨，忽略 {len(ignored)} 条其他语言或重复轨。",
+                )
+            continue
         for index in range(0, len(video_tracks), 2):
             first = video_tracks[index]
             second = video_tracks[index + 1] if index + 1 < len(video_tracks) else None
